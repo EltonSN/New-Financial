@@ -1,19 +1,29 @@
 {
-  "name": "finance-control-api",
+  "name": "finance-control-monorepo",
   "version": "1.0.0",
-  "description": "API para controle financeiro pessoal",
-  "main": "server.js",
+  "description": "Sistema de Controle Financeiro Pessoal - Monorepo",
+  "private": true,
   "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js"
+    "install:api": "cd api && npm install",
+    "install:frontend": "cd frontend && npm install",
+    "install:all": "npm run install:api && npm run install:frontend",
+    "dev:api": "cd api && npm run dev",
+    "dev:frontend": "cd frontend && npm start",
+    "dev": "concurrently \"npm run dev:api\" \"npm run dev:frontend\"",
+    "build:frontend": "cd frontend && npm run build",
+    "start:api": "cd api && npm start",
+    "vercel-build": "cd frontend && npm install && npm run build"
   },
-  "dependencies": {
-    "express": "^4.18.2",
-    "mysql2": "^3.6.5",
-    "cors": "^2.8.5",
-    "dotenv": "^16.3.1"
-  },
+  "keywords": [
+    "finance",
+    "control",
+    "react",
+    "nodejs",
+    "mysql"
+  ],
+  "author": "Seu Nome",
+  "license": "MIT",
   "devDependencies": {
-    "nodemon": "^3.0.2"
+    "concurrently": "^8.2.2"
   }
 }

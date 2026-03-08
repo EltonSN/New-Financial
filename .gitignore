@@ -1,4 +1,31 @@
-/env
-*__pycache__
+# Dependências
+node_modules/
+api/node_modules/
+frontend/node_modules/
+
+# Arquivos de ambiente
 .env
-/node_modules
+.env.local
+.env.production
+api/.env
+
+# Build
+frontend/build/
+dist/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Vercel
+.vercel
