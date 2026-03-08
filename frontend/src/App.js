@@ -2,7 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Save, X, DollarSign, CreditCard, Settings, TrendingUp } from 'lucide-react';
 
 // ==================== CONFIGURAÇÃO & CONSTANTES ===================
-const API_BASE_URL = 'http://localhost:3001/api';
+const API_BASE_URL = process.env.NODE_ENV === 'production'
+  ? '/api'
+  : 'http://localhost:3001/api';
 
 const TRANSACTION_TYPES = {
   ENTRADA: 'ENTRADA',
