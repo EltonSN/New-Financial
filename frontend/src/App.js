@@ -8,7 +8,7 @@ import ApiService from './services/ApiService';
 import './App.css';
 
 // Lista de imagens disponíveis na pasta public/background
-const backgroundImages = ['op2.jpg', 'op3.jpg'];
+const backgroundImages = ['bg1.jpg', 'bg2.jpg', 'bg3.jpg', 'bg4.jpg', 'bg5.jpg', 'bg6.jpg', 'bg7.jpg', 'bg8.jpg', 'bg9.jpg', 'bg10.jpg'];
 
 const App = () => {
   const [currentPage, setCurrentPage] = useState('dashboard');
@@ -19,11 +19,10 @@ const App = () => {
   useEffect(() => {
     loadInitialData();
 
-    // Alterado para 5 segundos provisoriamente para você ver funcionando.
-    // Para 10 minutos depois volte para: 10 * 60 * 1000
+    // Atualiza a imagem de fundo a cada 10 minutos (600.000 ms)
     const bgInterval = setInterval(() => {
       setCurrentBgIndex((prevIndex) => (prevIndex + 1) % backgroundImages.length);
-    }, 5000);
+    }, 10 * 60 * 1000);
 
     return () => clearInterval(bgInterval);
   }, []);
