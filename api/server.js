@@ -9,6 +9,7 @@ const creditsRoutes = require('./routes/credits');
 const categoriesRoutes = require('./routes/categories');
 const fixedExpensesRoutes = require('./routes/fixedExpenses');
 const investmentsRoutes = require('./routes/investments');
+const dashboardRoutes = require('./routes/dashboard');
 
 const app = express();
 
@@ -32,6 +33,7 @@ app.use('/api/credits', creditsRoutes);
 app.use('/api/categories', categoriesRoutes);
 app.use('/api/fixed-expenses', fixedExpensesRoutes);
 app.use('/api/investments', investmentsRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 // Rota de health check
 app.get('/api/health', (req, res) => {

@@ -14,14 +14,21 @@ const App = () => {
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [categories, setCategories] = useState([]);
   const [cards, setCards] = useState([]);
-  const [currentBgIndex, setCurrentBgIndex] = useState(0);
+  const [currentBgIndex, setCurrentBgIndex] = useState(() => Math.floor(Math.random() * backgroundImages.length));
 
   useEffect(() => {
     loadInitialData();
 
-    // Atualiza a imagem de fundo a cada 10 minutos (600.000 ms)
+    // Atualiza a imagem de fundo aleatoriamente a cada 10 minutos (600.000 ms)
     const bgInterval = setInterval(() => {
-      setCurrentBgIndex((prevIndex) => (prevIndex + 1) % backgroundImages.length);
+      setCurrentBgIndex((prevIndex) => {
+        if (backgroundImages.length <= 1) return 0;
+        let nextIndex;
+        do {
+          nextIndex = Math.floor(Math.random() * backgroundImages.length);
+        } while (nextIndex === prevIndex);
+        return nextIndex;
+      });
     }, 10 * 60 * 1000);
 
     return () => clearInterval(bgInterval);

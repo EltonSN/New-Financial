@@ -35,7 +35,7 @@
   box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
   backdrop-filter: blur(5.6px);
   -webkit-backdrop-filter: blur(5.6px);
-  border-right: 1px solid rgba(52, 46, 46, 0.164);
+  border-right: 2px solid rgba(52, 46, 46, 0.164);
   box-shadow: 0 4px 20px rgba(15, 19, 31, 0.89);
   display: flex;
   flex-direction: column;
@@ -173,19 +173,19 @@
 
 .page-subtitle {
   font-size: 14px;
-  color: #64748b;
+  color: #90a7c9;
+  text-shadow: 0 0px 5px rgba(0, 0, 0, 0.774);
   margin: 0;
 }
 
 /* ==================== GLASS CARD ==================== */
 .glass-card {
-  background: rgba(17, 21, 28, 0.715);
+  background: rgba(17, 21, 28, 0.521);
   border-radius: 35px;
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 20px rgba(15, 19, 31, 0.89);
   backdrop-filter: blur(5.6px);
   -webkit-backdrop-filter: blur(5.6px);
-  border-right: 1px solid rgba(52, 46, 46, 0.112);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  border: 2px solid rgba(52, 46, 46, 0.164);
   padding: 24px;
   margin-bottom: 24px;
   transition: border-color 0.3s ease, box-shadow 0.3s ease;
@@ -253,7 +253,7 @@
 .dark-select {
   width: 100%;
   padding: 12px 16px;
-  background: rgba(15, 23, 42, 0.5);
+  background: rgba(14, 16, 21, 0.5);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 10px;
   color: #e2e8f0;
@@ -317,14 +317,14 @@
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #4a6d74, #5b5f60);
+  background: linear-gradient(135deg, #21333a, #5b5f60);
   color: #ffffff;
-  box-shadow: 0 2px 10px rgba(254, 255, 255, 0.25);
+  box-shadow: 0 2px 10px rgba(13, 16, 16, 0.377);
 }
 
 .btn-primary:hover {
-  background: linear-gradient(135deg, #68949c, #83898a);
-  box-shadow: 0 4px 16px rgba(254, 255, 255, 0.628);
+  background: linear-gradient(100deg, #21333a, #525e61);
+  box-shadow: 0 4px 16px rgba(34, 57, 57, 0.781);
   transform: translateY(-1px);
 }
 
@@ -551,11 +551,12 @@
 }
 
 .stat-card {
-  background: rgba(15, 23, 42, 0.6);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 16px;
+  background: rgba(17, 21, 28, 0.521);
+  border-radius: 35px;
+  box-shadow: 0 4px 20px rgba(15, 19, 31, 0.89);
+  backdrop-filter: blur(5.6px);
+  -webkit-backdrop-filter: blur(5.6px);
+  border: 2px solid rgba(52, 46, 46, 0.164);
   padding: 24px;
   transition: all 0.3s ease;
 }
@@ -591,11 +592,12 @@
 }
 
 .widget-placeholder {
-  background: rgba(15, 23, 42, 0.6);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 16px;
+  background: rgba(17, 21, 28, 0.521);
+  border-radius: 35px;
+  box-shadow: 0 4px 20px rgba(15, 19, 31, 0.89);
+  backdrop-filter: blur(5.6px);
+  -webkit-backdrop-filter: blur(5.6px);
+  border: 2px solid rgba(52, 46, 46, 0.164);
   padding: 32px;
   display: flex;
   flex-direction: column;
@@ -780,4 +782,30 @@
   color: #64748b;
   padding: 40px;
   font-size: 14px;
+}
+
+/* ==================== RECHARTS CUSTOMIZATION ==================== */
+.recharts-default-tooltip {
+  background-color: rgba(15, 23, 42, 0.9) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 8px !important;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5) !important;
+}
+
+.recharts-tooltip-item-name,
+.recharts-tooltip-item-value,
+.recharts-tooltip-item-separator {
+  color: #e2e8f0 !important;
+}
+
+.recharts-tooltip-label {
+  color: #94a3b8 !important;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.recharts-pie-sector:focus {
+  outline: none;
 }

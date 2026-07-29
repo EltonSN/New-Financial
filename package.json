@@ -1,6 +1,6 @@
 {
   "name": "finance-control-monorepo",
-  "version": "1.0.0",
+  "version": "1.9.0",
   "description": "Sistema de Controle Financeiro Pessoal - Monorepo",
   "private": true,
   "scripts": {
@@ -21,7 +21,7 @@
     "nodejs",
     "mysql"
   ],
-  "author": "Seu Nome",
+  "author": "Elton Nascimento",
   "license": "MIT",
   "devDependencies": {
     "concurrently": "^8.2.2"

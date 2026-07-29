@@ -151,6 +151,11 @@ class ApiService {
     });
   }
 
+  // Dashboard
+  static getDashboard() {
+    return this.request('/dashboard');
+  }
+
   // Investments
   static getInvestments() {
     return this.request('/investments');

@@ -35,7 +35,7 @@ const Sidebar = ({ currentPage, onNavigate }) => {
         </nav>
 
         <div className="sidebar-footer">
-          © 2026 FinanceControl - v1.0.0
+          © 2026 FinanceControl - v1.9.0
         </div>
       </aside>
 
