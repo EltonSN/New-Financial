@@ -3,9 +3,6 @@ import {
   TrendingUp,
   TrendingDown,
   Wallet,
-  PieChart as PieChartIcon,
-  BarChart3,
-  ArrowRightLeft,
   CreditCard,
   Target,
 } from 'lucide-react';

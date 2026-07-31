@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git status *)",
+      "Bash(npx react-scripts *)",
+      "Bash(npm uninstall *)"
+    ]
+  }
+}
