@@ -1,6 +1,6 @@
 {
-  "short_name": "FinanceControl",
-  "name": "FinanceControl - Sistema de Controle Financeiro Pessoal",
+  "short_name": "CoreFin",
+  "name": "CoreFin - Sistema de Controle Financeiro Pessoal",
   "icons": [
     {
       "src": "logo.png",

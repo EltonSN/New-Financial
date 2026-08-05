@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Save, X, CreditCard, DollarSign, TrendingUp } from 'lucide-react';
+import { Plus, Save, X, CreditCard, DollarSign, TrendingUp, TrendingDown } from 'lucide-react';
 import ApiService from '../services/ApiService';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
@@ -15,16 +15,19 @@ const SettingsPage = ({ onDataUpdate }) => {
   const [cards, setCards] = useState([]);
   const [categories, setCategories] = useState([]);
   const [fixedExpenses, setFixedExpenses] = useState([]);
+  const [recurringIncomes, setRecurringIncomes] = useState([]);
   const [investments, setInvestments] = useState([]);
 
   const [cardForm, setCardForm] = useState({ nome: '', vencimento_dia: '', limite_total: '' });
   const [categoryForm, setCategoryForm] = useState({ nome: '' });
   const [expenseForm, setExpenseForm] = useState({ DATA: new Date().toISOString().split('T')[0], DESPESA: '', VALOR: '' });
+  const [incomeForm, setIncomeForm] = useState({ DATA: new Date().toISOString().split('T')[0], RECEITA: '', VALOR: '' });
   const [investmentForm, setInvestmentForm] = useState({ DATA: new Date().toISOString().split('T')[0], CATEGORIA: '', VALOR: '', RENDIMENTO: '' });
 
   const [editingCard, setEditingCard] = useState(null);
   const [editingCategory, setEditingCategory] = useState(null);
   const [editingExpense, setEditingExpense] = useState(null);
+  const [editingIncome, setEditingIncome] = useState(null);
   const [editingInvestment, setEditingInvestment] = useState(null);
   const [investmentPage, setInvestmentPage] = useState(1);
 
@@ -32,6 +35,7 @@ const SettingsPage = ({ onDataUpdate }) => {
     cards: new Date(),
     categories: new Date(),
     expenses: new Date(),
+    incomes: new Date(),
     investments: new Date(),
   });
 
@@ -45,6 +49,7 @@ const SettingsPage = ({ onDataUpdate }) => {
       loadCards(),
       loadCategories(),
       loadFixedExpenses(),
+      loadRecurringIncomes(),
       loadInvestments(),
     ]);
   };
@@ -78,6 +83,16 @@ const SettingsPage = ({ onDataUpdate }) => {
       setLastUpdates(prev => ({ ...prev, expenses: new Date() }));
     } catch (error) {
       alert('Erro ao carregar despesas fixas');
+    }
+  };
+
+  const loadRecurringIncomes = async () => {
+    try {
+      const data = await ApiService.getRecurringIncomes();
+      setRecurringIncomes(data);
+      setLastUpdates(prev => ({ ...prev, incomes: new Date() }));
+    } catch (error) {
+      alert('Erro ao carregar receitas recorrentes');
     }
   };
 
@@ -196,6 +211,42 @@ const SettingsPage = ({ onDataUpdate }) => {
     }
   };
 
+  // Handlers para Receitas Recorrentes
+  const handleIncomeSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (editingIncome) {
+        await ApiService.updateRecurringIncome(editingIncome, incomeForm);
+      } else {
+        await ApiService.createRecurringIncome(incomeForm);
+      }
+      setIncomeForm({ DATA: new Date().toISOString().split('T')[0], RECEITA: '', VALOR: '' });
+      setEditingIncome(null);
+      loadRecurringIncomes();
+    } catch (error) {
+      alert('Erro ao salvar receita recorrente');
+    }
+  };
+
+  const handleEditIncome = (income) => {
+    setEditingIncome(income.ID);
+    setIncomeForm({
+      DATA: income.DATA ? String(income.DATA).split('T')[0] : '',
+      RECEITA: income.RECEITA,
+      VALOR: income.VALOR,
+    });
+  };
+
+  const handleDeleteIncome = async (income) => {
+    if (!window.confirm('Deseja realmente excluir esta receita?')) return;
+    try {
+      await ApiService.deleteRecurringIncome(income.ID);
+      loadRecurringIncomes();
+    } catch (error) {
+      alert('Erro ao excluir receita');
+    }
+  };
+
   // Handlers para Investimentos
   const handleInvestmentSubmit = async (e) => {
     e.preventDefault();
@@ -250,7 +301,8 @@ const SettingsPage = ({ onDataUpdate }) => {
   const tabs = [
     { id: 'cards', label: 'Cartões', icon: CreditCard },
     { id: 'categories', label: 'Categorias', icon: DollarSign },
-    { id: 'expenses', label: 'Despesas Fixas', icon: TrendingUp },
+    { id: 'expenses', label: 'Despesas Fixas', icon: TrendingDown },
+    { id: 'incomes', label: 'Receitas Recorrentes', icon: TrendingUp },
     { id: 'investments', label: 'Investimentos', icon: TrendingUp },
   ];
 
@@ -438,6 +490,65 @@ const SettingsPage = ({ onDataUpdate }) => {
               data={fixedExpenses}
               onEdit={handleEditExpense}
               onDelete={handleDeleteExpense}
+            />
+          </Card>
+        </>
+      )}
+
+      {activeTab === 'incomes' && (
+        <>
+          <Card title="Cadastro de Receitas Recorrentes">
+            <form onSubmit={handleIncomeSubmit}>
+              <div className="form-grid">
+                <Input
+                  label="Data"
+                  type="date"
+                  value={incomeForm.DATA}
+                  onChange={(e) => setIncomeForm({ ...incomeForm, DATA: e.target.value })}
+                  required
+                />
+                <Input
+                  label="Nome da Receita"
+                  type="text"
+                  value={incomeForm.RECEITA}
+                  onChange={(e) => setIncomeForm({ ...incomeForm, RECEITA: e.target.value })}
+                  required
+                />
+                <Input
+                  label="Valor Mensal"
+                  type="number"
+                  step="0.01"
+                  value={incomeForm.VALOR}
+                  onChange={(e) => setIncomeForm({ ...incomeForm, VALOR: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="form-actions">
+                <Button type="submit" icon={editingIncome ? Save : Plus}>
+                  {editingIncome ? 'Salvar Alterações' : 'Adicionar Receita'}
+                </Button>
+                {editingIncome && (
+                  <Button variant="secondary" onClick={() => {
+                    setEditingIncome(null);
+                    setIncomeForm({ DATA: new Date().toISOString().split('T')[0], RECEITA: '', VALOR: '' });
+                  }} icon={X}>
+                    Cancelar
+                  </Button>
+                )}
+              </div>
+            </form>
+          </Card>
+
+          <Card title="Receitas Recorrentes Cadastradas" subtitle={`Última atualização: ${lastUpdates.incomes.toLocaleString('pt-BR')}`}>
+            <Table
+              columns={[
+                { header: 'Data', field: 'DATA', render: (row) => formatDate(row.DATA) },
+                { header: 'Receita', field: 'RECEITA' },
+                { header: 'Valor Mensal', field: 'VALOR', render: (row) => formatCurrency(row.VALOR) },
+              ]}
+              data={recurringIncomes}
+              onEdit={handleEditIncome}
+              onDelete={handleDeleteIncome}
             />
           </Card>
         </>

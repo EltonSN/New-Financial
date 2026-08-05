@@ -5,6 +5,8 @@ import {
   Wallet,
   CreditCard,
   Target,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import {
   BarChart,
@@ -28,6 +30,7 @@ const DashboardPage = () => {
   const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [chartView, setChartView] = useState('daily'); // 'daily' or 'monthly'
+  const [expandedPrevisao, setExpandedPrevisao] = useState({});
 
   useEffect(() => {
     loadDashboard();
@@ -82,11 +85,14 @@ const DashboardPage = () => {
     entradasVsSaidasMensal,
     gastosPorCategoria,
     ultimasTransacoes,
-    resumoCartoes
+    resumoCartoes,
+    previsaoSaldo,
   } = dashboardData;
 
-  const saldoTotal = saldoGeral.totalEntradas - saldoGeral.totalSaidas;
   const investimentosTotal = investimentos.reduce((acc, curr) => acc + curr.valor, 0);
+  // Dinheiro aplicado em investimentos sai do caixa disponível mas nunca é lançado
+  // como transação de SAÍDA, então precisa ser descontado para não inflar o saldo.
+  const saldoTotal = saldoGeral.totalEntradas - saldoGeral.totalSaidas - investimentosTotal;
 
   const statCards = [
     {
@@ -121,6 +127,10 @@ const DashboardPage = () => {
   ];
 
   const mesesNome = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+
+  const limiteTotalGeral = resumoCartoes.reduce((acc, c) => acc + c.limiteTotal, 0);
+  const faturaTotalGeral = resumoCartoes.reduce((acc, c) => acc + c.faturaAtual, 0);
+  const percUtilizadoGeral = limiteTotalGeral > 0 ? (faturaTotalGeral / limiteTotalGeral) * 100 : 0;
 
   return (
     <div className="animate-fade-in">
@@ -160,9 +170,97 @@ const DashboardPage = () => {
         })}
       </div>
 
+      {/* Previsão de Saldo — Mês Atual e Próximo Mês */}
+      {previsaoSaldo && (
+        <div className="dashboard-grid-wide mb-6">
+          {[
+            { key: 'mesAtual', previsao: previsaoSaldo.mesAtual, titulo: 'Previsão de Saldo — Mês Atual' },
+            { key: 'proximoMes', previsao: previsaoSaldo.proximoMes, titulo: 'Previsão de Saldo — Próximo Mês' },
+          ].map(({ key, previsao, titulo }) => {
+            const isPositivo = previsao.saldoFinal >= 0;
+            const pendentes = [
+              ...previsao.detalhes.receitasRecorrentesPendentes.map(r => ({ id: `receita-${r.id}`, tipo: 'ENTRADA', rotulo: r.nome, valor: r.valor })),
+              ...previsao.detalhes.despesasFixasPendentes.map(d => ({ id: `despesa-${d.id}`, tipo: 'SAIDA', rotulo: d.nome, valor: d.valor })),
+              ...previsao.detalhes.faturasCartao.map((f, i) => ({ id: `fatura-${i}`, tipo: 'SAIDA', rotulo: `Fatura ${f.nome}`, valor: f.valor })),
+            ];
+            const isExpanded = !!expandedPrevisao[key];
+
+            return (
+              <div className="glass-card" key={key} style={{ padding: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px', gap: '10px' }}>
+                  <h3 className="glass-card-title m-0">{titulo}</h3>
+                  <span style={{ fontSize: '12px', color: '#64748b', whiteSpace: 'nowrap' }}>
+                    {mesesNome[previsao.mes - 1]}/{previsao.ano}
+                  </span>
+                </div>
+
+                <div style={{ fontSize: '28px', fontWeight: 700, color: isPositivo ? '#22c55e' : '#ef4444', marginBottom: '16px' }}>
+                  {formatCurrency(previsao.saldoFinal)}
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px', marginBottom: pendentes.length > 0 ? '14px' : 0 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8' }}>
+                    <span>Saldo Inicial</span>
+                    <span>{formatCurrency(previsao.saldoInicial)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#22c55e' }}>
+                    <span>+ Entradas Previstas</span>
+                    <span>{formatCurrency(previsao.entradasPrevistas)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#ef4444' }}>
+                    <span>- Saídas Previstas</span>
+                    <span>{formatCurrency(previsao.saidasPrevistas)}</span>
+                  </div>
+                </div>
+
+                {pendentes.length > 0 && (
+                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '10px' }}>
+                    <button
+                      onClick={() => setExpandedPrevisao(prev => ({ ...prev, [key]: !prev[key] }))}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        width: '100%',
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        padding: 0,
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        color: '#94a3b8',
+                      }}
+                    >
+                      <span>Contas a pagar/receber ({pendentes.length})</span>
+                      {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                    </button>
+
+                    {isExpanded && (
+                      <div style={{ marginTop: '10px' }}>
+                        {pendentes.map((item) => (
+                          <div
+                            key={item.id}
+                            style={{ fontSize: '11px', color: '#94a3b8', display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}
+                          >
+                            <span>{item.rotulo} ({item.tipo === 'ENTRADA' ? 'a receber' : 'a pagar'}):</span>
+                            <span style={{ color: item.tipo === 'ENTRADA' ? '#22c55e' : '#ef4444' }}>
+                              {formatCurrency(item.valor)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {/* Grid de Gráficos Principais */}
       <div className="dashboard-grid-wide" style={{ marginBottom: '24px' }}>
-        
+
         {/* Gráfico Barras: Entradas vs Saídas */}
         <div className="glass-card" style={{ padding: '20px', minHeight: '380px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
@@ -302,6 +400,26 @@ const DashboardPage = () => {
         {/* Resumo de Cartões */}
         <div className="glass-card" style={{ padding: '20px' }}>
           <h3 className="glass-card-title mb-4">Resumo de Cartões</h3>
+
+          {resumoCartoes.length > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', marginBottom: '16px', padding: '12px', background: 'rgba(15, 23, 42, 0.3)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.03)' }}>
+              <div>
+                <div style={{ fontSize: '10px', color: '#64748b', marginBottom: '2px' }}>Limite Total</div>
+                <div style={{ fontSize: '14px', fontWeight: 600, color: '#e2e8f0' }}>{formatCurrency(limiteTotalGeral)}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: '10px', color: '#64748b', marginBottom: '2px' }}>Faturas Somadas</div>
+                <div style={{ fontSize: '14px', fontWeight: 600, color: '#06b6d4' }}>{formatCurrency(faturaTotalGeral)}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: '10px', color: '#64748b', marginBottom: '2px' }}>Utilizado</div>
+                <div style={{ fontSize: '14px', fontWeight: 600, color: percUtilizadoGeral > 85 ? '#ef4444' : percUtilizadoGeral > 70 ? '#f59e0b' : '#22c55e' }}>
+                  {percUtilizadoGeral.toFixed(0)}%
+                </div>
+              </div>
+            </div>
+          )}
+
           <div>
             {resumoCartoes.map((card) => {
               const perc = card.limiteTotal > 0 ? (card.faturaAtual / card.limiteTotal) * 100 : 0;

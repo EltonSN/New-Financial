@@ -131,7 +131,18 @@ const TransactionsPage = ({ categories }) => {
       )
     },
     { header: 'Descrição', field: 'DESCRICAO' },
-    { header: 'Valor', field: 'VALOR', render: (row) => formatCurrency(row.VALOR) },
+    {
+      header: 'Valor',
+      field: 'VALOR',
+      render: (row) => (
+        <span style={{
+          color: row.TIPO === 'ENTRADA' ? '#10B981' : '#EF4444',
+          fontWeight: '600',
+        }}>
+          {row.TIPO === 'ENTRADA' ? '+' : '-'}{formatCurrency(row.VALOR)}
+        </span>
+      )
+    },
     { header: 'Categoria', field: 'categoria_nome' },
   ];
 

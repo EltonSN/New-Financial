@@ -13,10 +13,10 @@ router.get('/', async (req, res) => {
 
 router.post('/', async (req, res) => {
   try {
-    const { DATA, DESPESA, VALOR } = req.body;
+    const { DATA, DESPESA, VALOR, ATIVO } = req.body;
     const [result] = await db.query(
-      'INSERT INTO fixed_expense (DATA, DESPESA, VALOR) VALUES (?, ?, ?)',
-      [DATA, DESPESA, VALOR]
+      'INSERT INTO fixed_expense (DATA, DESPESA, VALOR, ATIVO) VALUES (?, ?, ?, ?)',
+      [DATA, DESPESA, VALOR, ATIVO === undefined ? 1 : ATIVO]
     );
     res.status(201).json({ id: result.insertId, message: 'Despesa criada com sucesso' });
   } catch (error) {
@@ -27,10 +27,10 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { DATA, DESPESA, VALOR } = req.body;
+    const { DATA, DESPESA, VALOR, ATIVO } = req.body;
     await db.query(
-      'UPDATE fixed_expense SET DATA = ?, DESPESA = ?, VALOR = ? WHERE ID = ?',
-      [DATA, DESPESA, VALOR, id]
+      'UPDATE fixed_expense SET DATA = ?, DESPESA = ?, VALOR = ?, ATIVO = ? WHERE ID = ?',
+      [DATA, DESPESA, VALOR, ATIVO === undefined ? 1 : ATIVO, id]
     );
     res.json({ message: 'Despesa atualizada com sucesso' });
   } catch (error) {

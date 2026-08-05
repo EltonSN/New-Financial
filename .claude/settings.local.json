@@ -3,7 +3,10 @@
     "allow": [
       "Bash(git status *)",
       "Bash(npx react-scripts *)",
-      "Bash(npm uninstall *)"
+      "Bash(npm uninstall *)",
+      "Bash(pkill -f react-scripts)",
+      "Bash(pkill -f \"npm start\")",
+      "Bash(git diff *)"
     ]
   }
 }

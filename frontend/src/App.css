@@ -173,8 +173,8 @@
 
 .page-subtitle {
   font-size: 14px;
-  color: #90a7c9;
-  text-shadow: 0 0px 5px rgba(0, 0, 0, 0.774);
+  color: rgb(154, 172, 198);
+  text-shadow: 0 0px 5px rgba(0, 0, 0, 0.411);
   margin: 0;
 }
 
@@ -193,7 +193,7 @@
 
 .glass-card:hover {
   border-color: rgba(255, 255, 255, 0.12);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4); 
 }
 
 .glass-card-title {
@@ -546,6 +546,7 @@
 .dashboard-grid-wide {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  align-items: start;
   gap: 24px;
   margin-top: 24px;
 }
@@ -587,7 +588,7 @@
 
 .stat-label {
   font-size: 13px;
-  color: #64748b;
+  color: #a2b4cd;
   font-weight: 500;
 }
 
@@ -689,11 +690,9 @@
 /* ==================== ANIMATIONS ==================== */
 @keyframes fadeIn {
   from {
-    opacity: 0;
     transform: translateY(12px);
   }
   to {
-    opacity: 1;
     transform: translateY(0);
   }
 }

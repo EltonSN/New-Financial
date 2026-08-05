@@ -14,8 +14,11 @@ const Sidebar = ({ currentPage, onNavigate }) => {
       {/* Desktop Sidebar */}
       <aside className="sidebar">
         <div className="sidebar-logo">
-          <img src={process.env.PUBLIC_URL + '/logo.png'} alt="FinanceControl Logo" />
-          <span className="sidebar-logo-text">FinanceControl</span>
+          <img src={process.env.PUBLIC_URL + '/logo.png'} alt="CoreFin Logo" />
+          <span className="sidebar-logo-text">
+            <span style={{ color: '#DAF1DE', fontWeight: 700 }}>Core</span>
+            <span style={{ color: '#8EB69B', fontWeight: 400 }}>Fin</span>
+          </span>
         </div>
 
         <nav className="sidebar-nav">
@@ -35,7 +38,7 @@ const Sidebar = ({ currentPage, onNavigate }) => {
         </nav>
 
         <div className="sidebar-footer">
-          © 2026 FinanceControl - v1.9.0
+          © 2026 CoreFin - v2.0.0
         </div>
       </aside>
 

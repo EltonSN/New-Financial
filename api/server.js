@@ -8,6 +8,7 @@ const cardsRoutes = require('./routes/cards');
 const creditsRoutes = require('./routes/credits');
 const categoriesRoutes = require('./routes/categories');
 const fixedExpensesRoutes = require('./routes/fixedExpenses');
+const recurringIncomeRoutes = require('./routes/recurringIncome');
 const investmentsRoutes = require('./routes/investments');
 const dashboardRoutes = require('./routes/dashboard');
 
@@ -32,6 +33,7 @@ app.use('/api/cards', cardsRoutes);
 app.use('/api/credits', creditsRoutes);
 app.use('/api/categories', categoriesRoutes);
 app.use('/api/fixed-expenses', fixedExpensesRoutes);
+app.use('/api/recurring-income', recurringIncomeRoutes);
 app.use('/api/investments', investmentsRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 

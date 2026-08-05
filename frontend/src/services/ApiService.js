@@ -151,6 +151,31 @@ class ApiService {
     });
   }
 
+  // Recurring Income (Receitas Recorrentes)
+  static getRecurringIncomes() {
+    return this.request('/recurring-income');
+  }
+
+  static createRecurringIncome(data) {
+    return this.request('/recurring-income', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  static updateRecurringIncome(id, data) {
+    return this.request(`/recurring-income/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  static deleteRecurringIncome(id) {
+    return this.request(`/recurring-income/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
   // Dashboard
   static getDashboard() {
     return this.request('/dashboard');
