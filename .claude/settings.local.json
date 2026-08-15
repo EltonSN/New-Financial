@@ -6,7 +6,14 @@
       "Bash(npm uninstall *)",
       "Bash(pkill -f react-scripts)",
       "Bash(pkill -f \"npm start\")",
-      "Bash(git diff *)"
+      "Bash(git diff *)",
+      "Bash(node -c api/routes/loans.js)",
+      "Bash(node -c api/server.js)",
+      "Bash(curl -sv http://localhost:3001/api/health)",
+      "Bash(ip route *)",
+      "Bash(netstat -tlnp)",
+      "Bash(curl -s --max-time 3 http://172.26.176.1:3001/api/health)",
+      "Bash(echo \"EXIT:$?\")"
     ]
   }
 }

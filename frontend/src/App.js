@@ -3,6 +3,8 @@ import Sidebar from './components/Sidebar';
 import DashboardPage from './pages/DashboardPage';
 import TransactionsPage from './pages/TransactionsPage';
 import CardsPage from './pages/CardsPage';
+import HousePage from './pages/HousePage';
+import LoansPage from './pages/LoansPage';
 import SettingsPage from './pages/SettingsPage';
 import ApiService from './services/ApiService';
 import './App.css';
@@ -55,6 +57,10 @@ const App = () => {
         return <TransactionsPage categories={categories} />;
       case 'cards':
         return <CardsPage cards={cards} />;
+      case 'house':
+        return <HousePage />;
+      case 'loans':
+        return <LoansPage />;
       case 'settings':
         return <SettingsPage onDataUpdate={loadInitialData} />;
       default:

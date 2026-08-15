@@ -1,6 +1,19 @@
 # CoreFin
 
-Sistema de Controle Financeiro Pessoal — monorepo com API em Express/MySQL e uma SPA em React para acompanhar receitas, despesas, cartões de crédito, investimentos e despesas fixas/recorrentes.
+Sistema de Controle Financeiro Pessoal — monorepo com API em Express/MySQL e uma SPA em React para acompanhar receitas, despesas, cartões de crédito, investimentos, despesas fixas/recorrentes, gastos da casa e empréstimos a receber.
+
+## Funcionalidades
+
+| Página | O que faz |
+|--------|-----------|
+| **Dashboard** | Saldo acumulado, totais do mês, séries diária/mensal de receita × despesa, gastos por categoria, últimas transações, fatura por cartão e a **Previsão de Saldo** (mês atual e próximo, com detalhamento de receitas recorrentes, despesas fixas e faturas pendentes) |
+| **Transações** | CRUD de entradas e saídas com paginação condensada |
+| **Cartões** | Faturas por cartão, limites e vencimentos |
+| **Casa** | Compras e serviços feitos para a casa (reforma, melhorias, decoração, manutenção…), parcelados ou à vista — cadastro rápido em linha, cards agrupados por categoria, totalizador do mês e resumo "Simplificado" em pop-up |
+| **Empréstimos** | Valores que outras pessoas devem a você, agrupados por devedor, com dívidas fixas (recorrentes) ou parceladas e extrato "Simplificado" por devedor |
+| **Configurações** | CRUD em abas de cartões, categorias, despesas fixas, receitas recorrentes e investimentos |
+
+Casa e Empréstimos usam o mesmo **modelo de corrente de parcelas**: cada parcela é uma linha própria e, ao marcar a parcela do mês como paga, a API já cria automaticamente a parcela seguinte com o vencimento avançado um mês (ajustando para o último dia do mês quando necessário — 31/01 → 28/02). A contagem de parcelas restantes fica **azul quando faltam 2** e **verde quando falta 1**, sinalizando a reta final.
 
 ## Stack
 
@@ -23,9 +36,10 @@ CoreFin/
 │   └── src/
 │       ├── components/      # Sidebar, Pagination, e kit ui/ (Button, Card, Input, Select, Table)
 │       ├── constants/theme.js  # design tokens (cores, glass, sombras, breakpoints)
-│       ├── pages/            # DashboardPage, TransactionsPage, CardsPage, SettingsPage
+│       ├── pages/            # DashboardPage, TransactionsPage, CardsPage, HousePage, LoansPage, SettingsPage
 │       └── services/ApiService.js  # único ponto de comunicação com a API
 ├── structure/                # dumps de estrutura do banco (SQL)
+│   └── migrations/           # scripts de criação/alteração aplicados após o último dump
 ├── vercel.json               # roteamento de deploy
 └── package.json               # scripts de orquestração do monorepo (root)
 ```
@@ -51,7 +65,10 @@ CoreFin/
    NODE_ENV=development
    PORT=3001
    ```
-   Não há passo de migração — o schema é assumido como já existente no banco de destino (ver `structure/*.sql` para referência da estrutura atual).
+   Não há runner de migração — o schema é assumido como já existente no banco de destino (ver `structure/structure-*.sql` para o dump da estrutura atual). Alterações de schema feitas após o último dump ficam em `structure/migrations/*.sql` e precisam ser **aplicadas manualmente** no MySQL, por exemplo:
+   ```bash
+   mysql -h <host> -u <user> -p <database> < structure/migrations/2026-08-15-create-house-expense.sql
+   ```
 
 ## Rodando localmente
 
@@ -91,6 +108,8 @@ Todas as rotas são montadas sob `/api/<recurso>` em `api/server.js`, cada uma e
 |-------------------------|----------------------------------|--------------------|
 | `/api/transactions`     | `routes/transactions.js`        | `transactions`     |
 | `/api/cards`            | `routes/cards.js`               | `cards`            |
+| `/api/loans`            | `routes/loans.js`               | `loan`             |
+| `/api/house-expenses`   | `routes/houseExpenses.js`       | `house_expense`    |
 | `/api/credits`          | `routes/credits.js`             | `credit`           |
 | `/api/categories`       | `routes/categories.js`          | `categories`       |
 | `/api/fixed-expenses`   | `routes/fixedExpenses.js`       | `fixed_expense`    |
@@ -99,7 +118,9 @@ Todas as rotas são montadas sob `/api/<recurso>` em `api/server.js`, cada uma e
 | `/api/dashboard`        | `routes/dashboard.js`           | agregações (`Promise.all` sobre várias tabelas) |
 | `/api/health`           | inline em `server.js`           | —                  |
 
-> Atenção: nomes de rota nem sempre coincidem com o nome da tabela (ex.: `fixed-expenses` → `fixed_expense`, `credits` → `credit`, `investments` → `investment`, no singular). Colunas financeiras usam SCREAMING_SNAKE_CASE (`DATA`, `TIPO`, `VALOR`, `DESCRICAO`), enquanto metadados de cartão/categoria usam `snake_case` (`nome`, `limite_total`, `vencimento_dia`, `categoria_id`).
+Além do CRUD padrão, `/api/loans` e `/api/house-expenses` expõem `POST /:id/pagar` (quita a parcela do mês e projeta a seguinte); `/api/house-expenses` também tem `POST /:id/reabrir` para desfazer o pagamento.
+
+> Atenção: nomes de rota nem sempre coincidem com o nome da tabela (ex.: `fixed-expenses` → `fixed_expense`, `credits` → `credit`, `investments` → `investment`, `loans` → `loan`, `house-expenses` → `house_expense`, no singular). Colunas financeiras usam SCREAMING_SNAKE_CASE (`DATA`, `TIPO`, `VALOR`, `DESCRICAO`), enquanto metadados de cartão/categoria usam `snake_case` (`nome`, `limite_total`, `vencimento_dia`, `categoria_id`).
 
 ## Convenções do projeto
 
@@ -109,4 +130,4 @@ Todas as rotas são montadas sob `/api/<recurso>` em `api/server.js`, cada uma e
 - Toda chamada à API do frontend passa por `ApiService.js` — não use `fetch` direto em componentes.
 - Estilos são objetos inline construídos a partir dos tokens em `constants/theme.js` — não há Tailwind nem CSS-in-JS.
 
-Para detalhes de arquitetura mais aprofundados, veja [`CLAUDE.md`](./CLAUDE.md). Para o roadmap de melhorias e a estrutura de subagents sugerida para este projeto, veja [`BRIEFING.md`](./BRIEFING.md).
+Para detalhes de arquitetura mais aprofundados, veja [`CLAUDE.md`](./CLAUDE.md). Para o histórico do que já foi construído e as decisões tomadas em cada etapa, veja [`memories.md`](./memories.md). Para o roadmap de melhorias e a estrutura de subagents sugerida para este projeto, veja [`BRIEFING.md`](./BRIEFING.md).

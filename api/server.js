@@ -5,6 +5,8 @@ const cors = require('cors');
 // Importar rotas
 const transactionsRoutes = require('./routes/transactions');
 const cardsRoutes = require('./routes/cards');
+const loansRoutes = require('./routes/loans');
+const houseExpensesRoutes = require('./routes/houseExpenses');
 const creditsRoutes = require('./routes/credits');
 const categoriesRoutes = require('./routes/categories');
 const fixedExpensesRoutes = require('./routes/fixedExpenses');
@@ -30,6 +32,8 @@ if (process.env.NODE_ENV !== 'production') {
 // Rotas
 app.use('/api/transactions', transactionsRoutes);
 app.use('/api/cards', cardsRoutes);
+app.use('/api/loans', loansRoutes);
+app.use('/api/house-expenses', houseExpensesRoutes);
 app.use('/api/credits', creditsRoutes);
 app.use('/api/categories', categoriesRoutes);
 app.use('/api/fixed-expenses', fixedExpensesRoutes);

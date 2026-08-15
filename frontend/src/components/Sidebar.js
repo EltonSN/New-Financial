@@ -1,10 +1,12 @@
 import React from 'react';
-import { LayoutDashboard, ArrowRightLeft, CreditCard, Settings } from 'lucide-react';
+import { LayoutDashboard, ArrowRightLeft, CreditCard, Home, HandCoins, Settings } from 'lucide-react';
 
 const navItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'transactions', label: 'Transações', icon: ArrowRightLeft },
   { id: 'cards', label: 'Cartões', icon: CreditCard },
+  { id: 'house', label: 'Casa', icon: Home },
+  { id: 'loans', label: 'Empréstimos', icon: HandCoins },
   { id: 'settings', label: 'Configurações', icon: Settings },
 ];
 
@@ -38,7 +40,7 @@ const Sidebar = ({ currentPage, onNavigate }) => {
         </nav>
 
         <div className="sidebar-footer">
-          © 2026 CoreFin - v2.0.0
+          © 2026 CoreFin - v3.0.0
         </div>
       </aside>
 

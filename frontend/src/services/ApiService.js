@@ -76,6 +76,74 @@ class ApiService {
     });
   }
 
+  // Loans (Empréstimos)
+  static getLoans() {
+    return this.request('/loans');
+  }
+
+  static createLoan(data) {
+    return this.request('/loans', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  static updateLoan(id, data) {
+    return this.request(`/loans/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  static payLoan(id) {
+    return this.request(`/loans/${id}/pagar`, {
+      method: 'POST',
+    });
+  }
+
+  static deleteLoan(id) {
+    return this.request(`/loans/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // House Expenses (Gastos da Casa)
+  static getHouseExpenses() {
+    return this.request('/house-expenses');
+  }
+
+  static createHouseExpense(data) {
+    return this.request('/house-expenses', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  static updateHouseExpense(id, data) {
+    return this.request(`/house-expenses/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  static payHouseExpense(id) {
+    return this.request(`/house-expenses/${id}/pagar`, {
+      method: 'POST',
+    });
+  }
+
+  static reopenHouseExpense(id) {
+    return this.request(`/house-expenses/${id}/reabrir`, {
+      method: 'POST',
+    });
+  }
+
+  static deleteHouseExpense(id) {
+    return this.request(`/house-expenses/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
   // Credit (Faturas)
   static getCredits() {
     return this.request('/credits');

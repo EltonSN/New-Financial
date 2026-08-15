@@ -86,6 +86,29 @@ CREATE TABLE `fixed_expense` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `house_expense`
+--
+
+DROP TABLE IF EXISTS `house_expense`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+ SET character_set_client = utf8mb4 ;
+CREATE TABLE `house_expense` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `descricao` varchar(150) NOT NULL,
+  `categoria` varchar(50) NOT NULL DEFAULT 'Outros',
+  `valor_mensal` decimal(10,2) NOT NULL,
+  `parcelas` int NOT NULL DEFAULT '1',
+  `parcela_atual` int NOT NULL DEFAULT '1',
+  `data_vencimento` date NOT NULL,
+  `status_pago` tinyint(1) NOT NULL DEFAULT '0',
+  `criado_em` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_house_expense_categoria` (`categoria`),
+  KEY `idx_house_expense_vencimento` (`data_vencimento`)
+) ENGINE=InnoDB AUTO_INCREMENT=17 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `investment`
 --
 
@@ -116,6 +139,29 @@ CREATE TABLE `limite` (
   `LIMITE` decimal(10,2) NOT NULL,
   PRIMARY KEY (`ID`)
 ) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `loan`
+--
+
+DROP TABLE IF EXISTS `loan`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+ SET character_set_client = utf8mb4 ;
+CREATE TABLE `loan` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `nome_devedor` varchar(150) NOT NULL,
+  `descricao` varchar(255) DEFAULT NULL,
+  `valor` decimal(10,2) NOT NULL,
+  `parcelas` int NOT NULL DEFAULT '1',
+  `parcela_atual` int NOT NULL DEFAULT '1',
+  `data_limite` date NOT NULL,
+  `is_fixo` tinyint(1) NOT NULL DEFAULT '0',
+  `status_pago` tinyint(1) NOT NULL DEFAULT '0',
+  `criado_em` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_loan_nome_devedor` (`nome_devedor`)
+) ENGINE=InnoDB AUTO_INCREMENT=28 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -156,7 +202,7 @@ CREATE TABLE `transactions` (
   KEY `fk_categoria` (`categoria_id`),
   KEY `idx_transactions_descricao` (`DESCRICAO`),
   CONSTRAINT `fk_categoria` FOREIGN KEY (`categoria_id`) REFERENCES `categories` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=756 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=767 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -172,4 +218,4 @@ CREATE TABLE `transactions` (
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-08-04 22:07:34
+-- Dump completed on 2026-08-15 14:16:02
