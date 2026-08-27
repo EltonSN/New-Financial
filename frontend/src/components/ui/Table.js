@@ -1,7 +1,9 @@
 import React from 'react';
 import { Edit2, Trash2 } from 'lucide-react';
 
-const Table = ({ columns, data, onEdit, onDelete }) => (
+// `rowStyle` é opcional: recebe (row, index) e devolve um style aplicado ao <tr>.
+// Usado pela página Cartões para destacar as faturas do mês atual e apagar as antigas.
+const Table = ({ columns, data, onEdit, onDelete, rowStyle }) => (
   <div style={{ overflowX: 'auto' }}>
     <table className="dark-table">
       <thead>
@@ -35,7 +37,7 @@ const Table = ({ columns, data, onEdit, onDelete }) => (
           </tr>
         ) : (
           data.map((row, rowIdx) => (
-            <tr key={rowIdx}>
+            <tr key={rowIdx} style={rowStyle ? rowStyle(row, rowIdx) : undefined}>
               {columns.map((col, colIdx) => (
                 <td key={colIdx}>
                   {col.render ? col.render(row) : row[col.field]}

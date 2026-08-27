@@ -2,10 +2,16 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
 
-// GET - Listar todas as faturas
+// GET - Listar todas as faturas. Traz junto o dia de fechamento/vencimento do cartão
+// (cadastro em `cards`) para a página montar a coluna Fech./Venc. sem uma segunda chamada.
 router.get('/', async (req, res) => {
   try {
-    const [rows] = await db.query('SELECT * FROM credit ORDER BY DATA DESC');
+    const [rows] = await db.query(
+      `SELECT c.*, cd.cor, cd.fechamento_dia, cd.vencimento_dia
+       FROM credit c
+       LEFT JOIN cards cd ON cd.nome = c.CARTAO
+       ORDER BY c.DATA DESC, c.ID DESC`
+    );
     res.json(rows);
   } catch (error) {
     console.error('Erro ao buscar faturas:', error);
@@ -16,11 +22,11 @@ router.get('/', async (req, res) => {
 // POST - Criar nova fatura
 router.post('/', async (req, res) => {
   try {
-    const { DATA, CARTAO, VALOR, PARCELAS, PROXIMO } = req.body;
+    const { DATA, CARTAO, VALOR, PROXIMO } = req.body;
     
     const [result] = await db.query(
-      'INSERT INTO credit (DATA, CARTAO, VALOR, PARCELAS, PROXIMO) VALUES (?, ?, ?, ?, ?)',
-      [DATA, CARTAO, VALOR, PARCELAS, PROXIMO]
+      'INSERT INTO credit (DATA, CARTAO, VALOR, PROXIMO, atualizado_em) VALUES (?, ?, ?, ?, NOW())',
+      [DATA, CARTAO, VALOR, PROXIMO || null]
     );
     
     res.status(201).json({ 
@@ -37,11 +43,11 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { DATA, CARTAO, VALOR, PARCELAS, PROXIMO } = req.body;
+    const { DATA, CARTAO, VALOR, PROXIMO } = req.body;
     
     await db.query(
-      'UPDATE credit SET DATA = ?, CARTAO = ?, VALOR = ?, PARCELAS = ?, PROXIMO = ? WHERE ID = ?',
-      [DATA, CARTAO, VALOR, PARCELAS, PROXIMO, id]
+      'UPDATE credit SET DATA = ?, CARTAO = ?, VALOR = ?, PROXIMO = ?, atualizado_em = NOW() WHERE ID = ?',
+      [DATA, CARTAO, VALOR, PROXIMO || null, id]
     );
     
     res.json({ message: 'Fatura atualizada com sucesso' });

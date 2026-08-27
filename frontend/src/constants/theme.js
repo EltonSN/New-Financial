@@ -48,6 +48,23 @@ export const COLORS = {
   white: '#ffffff',
 };
 
+// Paleta de identidade — cores atribuíveis a uma entidade (hoje `cards.cor`).
+// É daqui que a tela de Configurações monta os swatches: cor de cartão é decisão
+// de design, então mora no design system e não em hex solto na página (ADR-0005).
+// Todas escolhidas para manter contraste sobre o fundo escuro.
+export const TAG_PALETTE = [
+  { nome: 'Ciano', valor: COLORS.primary },
+  { nome: 'Verde', valor: COLORS.success },
+  { nome: 'Azul', valor: COLORS.info },
+  { nome: 'Âmbar', valor: COLORS.warning },
+  { nome: 'Vermelho', valor: COLORS.danger },
+  { nome: 'Roxo', valor: '#a855f7' },
+  { nome: 'Rosa', valor: '#ec4899' },
+  { nome: 'Lima', valor: '#84cc16' },
+  { nome: 'Laranja', valor: '#f97316' },
+  { nome: 'Cinza', valor: COLORS.textSecondary },
+];
+
 export const GLASS = {
   background: 'rgba(15, 23, 42, 0.6)',
   backdropFilter: 'blur(16px)',

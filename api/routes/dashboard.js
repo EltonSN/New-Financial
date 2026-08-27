@@ -15,33 +15,45 @@ function proximoMes(ano, mes) {
   return mes === 12 ? { ano: ano + 1, mes: 1 } : { ano, mes: mes + 1 };
 }
 
-// Despesas fixas ativas, já iniciadas no período, cujo nome (DESPESA) NÃO tenha
-// uma transação de SAIDA correspondente lançada no mesmo período (ou seja, ainda não pagas)
-async function buscarDespesasFixasPendentes({ start, end }) {
+// Normaliza um nome para comparação com DESCRICAO de transação (trim + uppercase)
+const normalizarNome = (nome) => String(nome || '').trim().toUpperCase();
+
+// Despesas fixas ativas e já iniciadas no período, com a flag `pago` indicando se
+// existe uma transação de SAIDA de mesmo nome (DESPESA) lançada no mesmo período.
+// Retorna também as já pagas: o dashboard as exibe riscadas nos detalhes, mas só
+// as pendentes entram no cálculo de saídas previstas.
+async function buscarDespesasFixas({ start, end }) {
   const [rows] = await db.query(
-    `SELECT fe.ID, fe.DESPESA, fe.VALOR
-     FROM fixed_expense fe
-     WHERE fe.ATIVO = 1
-       AND fe.DATA <= ?
-       AND NOT EXISTS (
+    `SELECT fe.ID, fe.DESPESA, fe.VALOR,
+       EXISTS (
          SELECT 1 FROM transactions t
          WHERE t.TIPO = 'SAIDA'
            AND TRIM(UPPER(t.DESCRICAO)) = TRIM(UPPER(fe.DESPESA))
            AND t.DATA BETWEEN ? AND ?
-       )`,
-    [end, start, end]
+       ) AS pago
+     FROM fixed_expense fe
+     WHERE fe.ATIVO = 1
+       AND fe.DATA <= ?
+     ORDER BY pago ASC, fe.DESPESA ASC`,
+    [start, end, end]
   );
   return rows;
 }
 
-// Mesma lógica de deduplicação, para receitas recorrentes vs. transações de ENTRADA.
+// Mesma lógica de baixa por nome, para receitas recorrentes vs. transações de ENTRADA.
 // Diferente das despesas fixas, nem toda receita recorrente deve se repetir todo mês:
 // só o Salário é de fato mensal e recorrente — as demais (ex: "Devoluções - Ago",
 // "Devoluções - Set") são lançamentos variáveis cadastrados um por mês, então só
-// contam como pendentes no próprio mês em que foram cadastradas.
-async function buscarReceitasRecorrentesPendentes({ ano, mes, start, end }) {
+// contam no próprio mês em que foram cadastradas.
+async function buscarReceitasRecorrentes({ ano, mes, start, end }) {
   const [rows] = await db.query(
-    `SELECT ri.ID, ri.RECEITA, ri.VALOR
+    `SELECT ri.ID, ri.RECEITA, ri.VALOR,
+       EXISTS (
+         SELECT 1 FROM transactions t
+         WHERE t.TIPO = 'ENTRADA'
+           AND TRIM(UPPER(t.DESCRICAO)) = TRIM(UPPER(ri.RECEITA))
+           AND t.DATA BETWEEN ? AND ?
+       ) AS pago
      FROM recurring_income ri
      WHERE ri.ATIVO = 1
        AND ri.DATA <= ?
@@ -49,15 +61,105 @@ async function buscarReceitasRecorrentesPendentes({ ano, mes, start, end }) {
          TRIM(UPPER(ri.RECEITA)) = 'SALÁRIO'
          OR (YEAR(ri.DATA) = ? AND MONTH(ri.DATA) = ?)
        )
-       AND NOT EXISTS (
-         SELECT 1 FROM transactions t
-         WHERE t.TIPO = 'ENTRADA'
-           AND TRIM(UPPER(t.DESCRICAO)) = TRIM(UPPER(ri.RECEITA))
-           AND t.DATA BETWEEN ? AND ?
-       )`,
-    [end, ano, mes, start, end]
+     ORDER BY pago ASC, ri.RECEITA ASC`,
+    [start, end, end, ano, mes]
   );
   return rows;
+}
+
+// Devoluções previstas: parcelas de empréstimo (tabela `loan`) com vencimento no
+// período. Duas flags, com papéis diferentes e que NÃO devem ser confundidas:
+//   - `pago`: existe transação de ENTRADA no período com o mesmo nome do devedor.
+//     É o único sinal que tira o valor da previsão, porque só a transação significa
+//     que o dinheiro entrou de fato no caixa.
+//   - `quitado`: o `status_pago` marcado na página de Empréstimos. Serve de indicador
+//     de controle, mas NÃO desconta da previsão — marcar como pago ali não cria
+//     transação nenhuma, então esse dinheiro continua sendo esperado no mês.
+async function buscarDevolucoes({ start, end }) {
+  const [rows] = await db.query(
+    `SELECT l.id, l.nome_devedor, l.descricao, l.valor, l.parcela_atual, l.parcelas,
+       l.status_pago AS quitado,
+       EXISTS (
+         SELECT 1 FROM transactions t
+         WHERE t.TIPO = 'ENTRADA'
+           AND TRIM(UPPER(t.DESCRICAO)) = TRIM(UPPER(l.nome_devedor))
+           AND t.DATA BETWEEN ? AND ?
+       ) AS pago
+     FROM loan l
+     WHERE l.data_limite BETWEEN ? AND ?
+     ORDER BY pago ASC, l.data_limite ASC, l.nome_devedor ASC`,
+    [start, end, start, end]
+  );
+  return rows;
+}
+
+async function buscarLoans() {
+  const [rows] = await db.query(
+    `SELECT id, nome_devedor, descricao, valor, parcelas, parcela_atual, data_limite, is_fixo, status_pago
+     FROM loan`
+  );
+  return rows;
+}
+
+// Normaliza um DATE do mysql2 (que vem como Date local) para 'YYYY-MM-DD' sem passar
+// por UTC — toISOString() deslocaria o dia dependendo do fuso.
+const dataISO = (valor) => {
+  if (valor instanceof Date) {
+    return `${valor.getFullYear()}-${String(valor.getMonth() + 1).padStart(2, '0')}-${String(valor.getDate()).padStart(2, '0')}`;
+  }
+  return String(valor || '').split('T')[0];
+};
+
+// Devoluções que ainda não existem como linha no banco mas vão cair no mês seguinte.
+// Trabalha por "corrente" de parcelas (mesmo devedor + mesma descrição) e olha a
+// cabeça da corrente — a parcela de maior número:
+//   - se a cabeça já está no mês que vem, ela é contada direto (nada a projetar);
+//   - se está até o fim do mês atual e ainda gera parcela (fixa ou com parcela
+//     restante), projeta uma parcela para o mês seguinte.
+// Olhar a cabeça da corrente — em vez de só as parcelas pendentes — é o que faz as
+// dívidas fixas e as parceladas já quitadas neste mês aparecerem na previsão do
+// próximo mês mesmo quando a parcela seguinte ainda não foi gerada no banco.
+function projetarDevolucoesProximoMes(loans, mesAtualRange, mesProxRange) {
+  const cabecas = new Map();
+  for (const l of loans) {
+    const chave = `${normalizarNome(l.nome_devedor)}||${normalizarNome(l.descricao)}`;
+    const atual = cabecas.get(chave);
+    if (!atual || Number(l.parcela_atual) > Number(atual.parcela_atual)) {
+      cabecas.set(chave, l);
+    }
+  }
+
+  const projetadas = [];
+  for (const l of cabecas.values()) {
+    const data = dataISO(l.data_limite);
+    if (data >= mesProxRange.start && data <= mesProxRange.end) continue; // já lançada
+    if (data > mesAtualRange.end) continue; // parcela de um mês mais à frente
+    const geraProxima = !!l.is_fixo || Number(l.parcela_atual) < Number(l.parcelas);
+    if (!geraProxima) continue;
+    projetadas.push({
+      ...l,
+      parcela_atual: Number(l.parcela_atual) + 1,
+      pago: 0,
+      quitado: 0,
+      projetado: true,
+    });
+  }
+  return projetadas;
+}
+
+// Descrições (normalizadas) de transações de SAIDA lançadas no período. Serve para
+// dar baixa na fatura de um cartão quando existe uma transação com o mesmo nome do
+// cartão — mesma convenção já usada pelas despesas fixas.
+async function buscarDescricoesSaidas({ start, end }) {
+  const [rows] = await db.query(
+    `SELECT DISTINCT TRIM(UPPER(DESCRICAO)) AS descricao
+     FROM transactions
+     WHERE TIPO = 'SAIDA'
+       AND DATA BETWEEN ? AND ?
+       AND DESCRICAO IS NOT NULL`,
+    [start, end]
+  );
+  return new Set(rows.map((r) => r.descricao));
 }
 
 // Totais de transações avulsas do mês. Ignora lançamentos de BALANCEAMENTO — esses
@@ -104,17 +206,14 @@ async function buscarFaturaCartoes(mesAtualRange, mesProxRange) {
     }
   }
 
-  const totais = { atual: 0, proximo: 0 };
   const porCartaoLista = [];
 
   for (const [nome, c] of Object.entries(porCartao)) {
     const valorProximo = c.temLancamentoProximo ? c.proximoLancado : c.proximoProjetado;
-    totais.atual += c.atual;
-    totais.proximo += valorProximo;
     porCartaoLista.push({ cartao: nome, atual: c.atual, proximo: valorProximo });
   }
 
-  return { ...totais, porCartao: porCartaoLista };
+  return { porCartao: porCartaoLista };
 }
 
 // Total atualmente aplicado em investimentos (último valor lançado por CATEGORIA).
@@ -142,13 +241,18 @@ async function calcularPrevisaoSaldo() {
 
   const [
     saldoAnteriorRows,
-    despesasPendentesAtual,
-    despesasPendentesProx,
-    receitasPendentesAtual,
-    receitasPendentesProx,
+    despesasFixasAtual,
+    despesasFixasProx,
+    receitasAtual,
+    receitasProx,
+    devolucoesAtual,
+    devolucoesProxLancadas,
+    loansTodos,
     totaisAtual,
     totaisProx,
     faturaCartoes,
+    saidasDescricoesAtual,
+    saidasDescricoesProx,
     investimentosTotal,
   ] = await Promise.all([
     // Saldo acumulado antes do mês atual + qualquer lançamento de BALANCEAMENTO,
@@ -166,13 +270,18 @@ async function calcularPrevisaoSaldo() {
        FROM transactions`,
       [mesAtualRange.start]
     ),
-    buscarDespesasFixasPendentes(mesAtualRange),
-    buscarDespesasFixasPendentes(mesProxRange),
-    buscarReceitasRecorrentesPendentes(mesAtualRange),
-    buscarReceitasRecorrentesPendentes(mesProxRange),
+    buscarDespesasFixas(mesAtualRange),
+    buscarDespesasFixas(mesProxRange),
+    buscarReceitasRecorrentes(mesAtualRange),
+    buscarReceitasRecorrentes(mesProxRange),
+    buscarDevolucoes(mesAtualRange),
+    buscarDevolucoes(mesProxRange),
+    buscarLoans(),
     buscarTotaisTransacoes(mesAtualRange),
     buscarTotaisTransacoes(mesProxRange),
     buscarFaturaCartoes(mesAtualRange, mesProxRange),
+    buscarDescricoesSaidas(mesAtualRange),
+    buscarDescricoesSaidas(mesProxRange),
     buscarInvestimentosTotal(),
   ]);
 
@@ -180,12 +289,36 @@ async function calcularPrevisaoSaldo() {
   // é registrada como transação de SAÍDA (confirmado com o usuário)
   const saldoAnterior = Number(saldoAnteriorRows[0][0].saldo) - investimentosTotal;
 
-  const montarMes = (range, despesasPendentes, receitasPendentes, totaisTransacoes, faturaMes, saldoInicial, faturasPorCartao) => {
-    const totalDespesasFixasPendentes = despesasPendentes.reduce((acc, d) => acc + Number(d.VALOR), 0);
-    const totalReceitasPendentes = receitasPendentes.reduce((acc, r) => acc + Number(r.VALOR), 0);
+  // Faturas por cartão de cada mês, já com a baixa aplicada quando existe uma
+  // transação de SAIDA com o mesmo nome do cartão dentro do período.
+  const montarFaturas = (chaveValor, descricoesSaidas) => faturaCartoes.porCartao
+    .map((c) => ({
+      nome: c.cartao,
+      valor: Number(c[chaveValor] || 0),
+      pago: descricoesSaidas.has(normalizarNome(c.cartao)),
+    }))
+    .filter((f) => f.valor > 0);
 
-    const entradasPrevistas = totalReceitasPendentes + totaisTransacoes.entradas;
-    const saidasPrevistas = totalDespesasFixasPendentes + faturaMes + totaisTransacoes.saidas;
+  const faturasAtual = montarFaturas('atual', saidasDescricoesAtual);
+  const faturasProx = montarFaturas('proximo', saidasDescricoesProx);
+
+  const devolucoesProxProjetadas = projetarDevolucoesProximoMes(loansTodos, mesAtualRange, mesProxRange);
+
+  // Só o que ainda está pendente entra no cálculo; o que já foi pago/recebido
+  // continua na lista de detalhes (riscado no dashboard) mas fora das previsões,
+  // porque já está refletido nos totais de transações do mês.
+  const somarPendentes = (itens, campoValor) => itens
+    .filter((i) => !i.pago)
+    .reduce((acc, i) => acc + Number(i[campoValor] || 0), 0);
+
+  const montarMes = ({ range, despesasFixas, receitas, devolucoes, faturas, totaisTransacoes, saldoInicial }) => {
+    const totalDespesasFixas = somarPendentes(despesasFixas, 'VALOR');
+    const totalReceitas = somarPendentes(receitas, 'VALOR');
+    const totalDevolucoes = somarPendentes(devolucoes, 'valor');
+    const totalFaturas = somarPendentes(faturas, 'valor');
+
+    const entradasPrevistas = totalReceitas + totalDevolucoes + totaisTransacoes.entradas;
+    const saidasPrevistas = totalDespesasFixas + totalFaturas + totaisTransacoes.saidas;
     const saldoFinal = saldoInicial + entradasPrevistas - saidasPrevistas;
 
     return {
@@ -196,25 +329,58 @@ async function calcularPrevisaoSaldo() {
       saidasPrevistas,
       saldoFinal,
       detalhes: {
-        despesasFixasPendentes: despesasPendentes.map(d => ({ id: d.ID, nome: d.DESPESA, valor: Number(d.VALOR) })),
-        receitasRecorrentesPendentes: receitasPendentes.map(r => ({ id: r.ID, nome: r.RECEITA, valor: Number(r.VALOR) })),
-        faturasCartao: faturasPorCartao.filter(f => f.valor > 0),
+        despesasFixas: despesasFixas.map(d => ({
+          id: d.ID,
+          nome: d.DESPESA,
+          valor: Number(d.VALOR),
+          pago: !!d.pago,
+        })),
+        receitasRecorrentes: receitas.map(r => ({
+          id: r.ID,
+          nome: r.RECEITA,
+          valor: Number(r.VALOR),
+          pago: !!r.pago,
+        })),
+        devolucoes: devolucoes.map(d => ({
+          id: d.id,
+          nome: d.nome_devedor,
+          descricao: d.descricao,
+          valor: Number(d.valor),
+          parcelaAtual: d.parcela_atual,
+          parcelas: d.parcelas,
+          pago: !!d.pago,
+          quitado: !!d.quitado,
+          projetado: !!d.projetado,
+        })),
+        faturasCartao: faturas,
         transacoesEntradas: totaisTransacoes.entradas,
         transacoesSaidas: totaisTransacoes.saidas,
-        faturaCartoes: faturaMes,
+        faturaCartoes: totalFaturas,
+        devolucoesPrevistas: totalDevolucoes,
       },
     };
   };
 
-  const mesAtualResultado = montarMes(
-    mesAtualRange, despesasPendentesAtual, receitasPendentesAtual, totaisAtual, faturaCartoes.atual, saldoAnterior,
-    faturaCartoes.porCartao.map(c => ({ nome: c.cartao, valor: c.atual }))
-  );
+  const mesAtualResultado = montarMes({
+    range: mesAtualRange,
+    despesasFixas: despesasFixasAtual,
+    receitas: receitasAtual,
+    devolucoes: devolucoesAtual,
+    faturas: faturasAtual,
+    totaisTransacoes: totaisAtual,
+    saldoInicial: saldoAnterior,
+  });
 
-  const proximoMesResultado = montarMes(
-    mesProxRange, despesasPendentesProx, receitasPendentesProx, totaisProx, faturaCartoes.proximo, mesAtualResultado.saldoFinal,
-    faturaCartoes.porCartao.map(c => ({ nome: c.cartao, valor: c.proximo }))
-  );
+  const proximoMesResultado = montarMes({
+    range: mesProxRange,
+    despesasFixas: despesasFixasProx,
+    receitas: receitasProx,
+    // Parcelas já lançadas para o mês que vem + as que serão geradas ao quitar as pendências deste mês
+    devolucoes: [...devolucoesProxLancadas, ...devolucoesProxProjetadas],
+    faturas: faturasProx,
+    totaisTransacoes: totaisProx,
+    saldoInicial: mesAtualResultado.saldoFinal,
+  });
 
   return { mesAtual: mesAtualResultado, proximoMes: proximoMesResultado };
 }
@@ -310,10 +476,19 @@ router.get('/', async (req, res) => {
         LIMIT 7
       `),
 
-      // 8. Resumo dos Cartões (limite vs fatura mais recente)
+      // 8. Resumo dos Cartões (limite vs fatura mais recente). `fatura_paga` sinaliza
+      //    que existe uma transação de SAIDA com o mesmo nome do cartão no mês atual —
+      //    mesma convenção de baixa por nome usada pelas despesas fixas.
       db.query(`
         SELECT cd.id, cd.nome, cd.limite_total, cd.vencimento_dia,
-          COALESCE(cr.fatura_atual, 0) as fatura_atual
+          COALESCE(cr.fatura_atual, 0) as fatura_atual,
+          EXISTS (
+            SELECT 1 FROM transactions t
+            WHERE t.TIPO = 'SAIDA'
+              AND TRIM(UPPER(t.DESCRICAO)) = TRIM(UPPER(cd.nome))
+              AND YEAR(t.DATA) = YEAR(CURDATE())
+              AND MONTH(t.DATA) = MONTH(CURDATE())
+          ) as fatura_paga
         FROM cards cd
         LEFT JOIN (
           SELECT c1.CARTAO, c1.VALOR as fatura_atual
@@ -367,6 +542,7 @@ router.get('/', async (req, res) => {
         limiteTotal: Number(r.limite_total),
         faturaAtual: Number(r.fatura_atual),
         vencimentoDia: r.vencimento_dia,
+        faturaPaga: !!r.fatura_paga,
       })),
       previsaoSaldo,
     });

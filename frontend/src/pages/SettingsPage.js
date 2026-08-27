@@ -6,6 +6,9 @@ import Input from '../components/ui/Input';
 import Card from '../components/ui/Card';
 import Table from '../components/ui/Table';
 import Pagination from '../components/Pagination';
+import Tag from '../components/ui/Tag';
+import ColorInput from '../components/ui/ColorInput';
+import { COLORS } from '../constants/theme';
 
 const ITEMS_PER_PAGE = 15;
 
@@ -18,7 +21,7 @@ const SettingsPage = ({ onDataUpdate }) => {
   const [recurringIncomes, setRecurringIncomes] = useState([]);
   const [investments, setInvestments] = useState([]);
 
-  const [cardForm, setCardForm] = useState({ nome: '', vencimento_dia: '', limite_total: '' });
+  const [cardForm, setCardForm] = useState({ nome: '', cor: COLORS.primary, fechamento_dia: '', vencimento_dia: '', limite_total: '' });
   const [categoryForm, setCategoryForm] = useState({ nome: '' });
   const [expenseForm, setExpenseForm] = useState({ DATA: new Date().toISOString().split('T')[0], DESPESA: '', VALOR: '' });
   const [incomeForm, setIncomeForm] = useState({ DATA: new Date().toISOString().split('T')[0], RECEITA: '', VALOR: '' });
@@ -116,7 +119,7 @@ const SettingsPage = ({ onDataUpdate }) => {
       } else {
         await ApiService.createCard(cardForm);
       }
-      setCardForm({ nome: '', vencimento_dia: '', limite_total: '' });
+      setCardForm({ nome: '', cor: COLORS.primary, fechamento_dia: '', vencimento_dia: '', limite_total: '' });
       setEditingCard(null);
       loadCards();
     } catch (error) {
@@ -128,6 +131,8 @@ const SettingsPage = ({ onDataUpdate }) => {
     setEditingCard(card.id);
     setCardForm({
       nome: card.nome,
+      cor: card.cor || COLORS.primary,
+      fechamento_dia: card.fechamento_dia || '',
       vencimento_dia: card.vencimento_dia,
       limite_total: card.limite_total,
     });
@@ -347,6 +352,20 @@ const SettingsPage = ({ onDataUpdate }) => {
                   onChange={(e) => setCardForm({ ...cardForm, nome: e.target.value })}
                   required
                 />
+                <ColorInput
+                  label="Cor do Cartão"
+                  value={cardForm.cor}
+                  onChange={(cor) => setCardForm({ ...cardForm, cor })}
+                />
+                <Input
+                  label="Dia do Fechamento"
+                  type="number"
+                  min="1"
+                  max="31"
+                  value={cardForm.fechamento_dia}
+                  onChange={(e) => setCardForm({ ...cardForm, fechamento_dia: e.target.value })}
+                  required
+                />
                 <Input
                   label="Dia do Vencimento"
                   type="number"
@@ -372,7 +391,7 @@ const SettingsPage = ({ onDataUpdate }) => {
                 {editingCard && (
                   <Button variant="secondary" onClick={() => {
                     setEditingCard(null);
-                    setCardForm({ nome: '', vencimento_dia: '', limite_total: '' });
+                    setCardForm({ nome: '', cor: COLORS.primary, fechamento_dia: '', vencimento_dia: '', limite_total: '' });
                   }} icon={X}>
                     Cancelar
                   </Button>
@@ -384,7 +403,12 @@ const SettingsPage = ({ onDataUpdate }) => {
           <Card title="Cartões Cadastrados" subtitle={`Última atualização: ${lastUpdates.cards.toLocaleString('pt-BR')}`}>
             <Table
               columns={[
-                { header: 'Nome', field: 'nome' },
+                {
+                  header: 'Nome',
+                  field: 'nome',
+                  render: (row) => <Tag color={row.cor || COLORS.primary}>{row.nome}</Tag>,
+                },
+                { header: 'Fechamento', field: 'fechamento_dia', render: (row) => row.fechamento_dia ? `Dia ${row.fechamento_dia}` : '-' },
                 { header: 'Vencimento', field: 'vencimento_dia', render: (row) => `Dia ${row.vencimento_dia}` },
                 { header: 'Limite Total', field: 'limite_total', render: (row) => formatCurrency(row.limite_total) },
               ]}

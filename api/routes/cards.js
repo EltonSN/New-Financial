@@ -16,11 +16,11 @@ router.get('/', async (req, res) => {
 // POST - Criar novo cartão
 router.post('/', async (req, res) => {
   try {
-    const { nome, vencimento_dia, limite_total } = req.body;
+    const { nome, cor, fechamento_dia, vencimento_dia, limite_total } = req.body;
     
     const [result] = await db.query(
-      'INSERT INTO cards (nome, vencimento_dia, limite_total) VALUES (?, ?, ?)',
-      [nome, vencimento_dia, limite_total]
+      'INSERT INTO cards (nome, cor, fechamento_dia, vencimento_dia, limite_total) VALUES (?, ?, ?, ?, ?)',
+      [nome, cor || null, fechamento_dia || null, vencimento_dia, limite_total]
     );
     
     res.status(201).json({ 
@@ -37,11 +37,11 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { nome, vencimento_dia, limite_total } = req.body;
+    const { nome, cor, fechamento_dia, vencimento_dia, limite_total } = req.body;
     
     await db.query(
-      'UPDATE cards SET nome = ?, vencimento_dia = ?, limite_total = ? WHERE id = ?',
-      [nome, vencimento_dia, limite_total, id]
+      'UPDATE cards SET nome = ?, cor = ?, fechamento_dia = ?, vencimento_dia = ?, limite_total = ? WHERE id = ?',
+      [nome, cor || null, fechamento_dia || null, vencimento_dia, limite_total, id]
     );
     
     res.json({ message: 'Cartão atualizado com sucesso' });

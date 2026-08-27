@@ -90,6 +90,9 @@ const DashboardPage = () => {
   } = dashboardData;
 
   const investimentosTotal = investimentos.reduce((acc, curr) => acc + curr.valor, 0);
+  // Devoluções ainda a receber no mês — já somadas em entradasPrevistas da previsão,
+  // exibidas aqui como detalhe do card de entradas do mês.
+  const devolucoesMesAtual = previsaoSaldo?.mesAtual?.detalhes?.devolucoesPrevistas || 0;
   // Dinheiro aplicado em investimentos sai do caixa disponível mas nunca é lançado
   // como transação de SAÍDA, então precisa ser descontado para não inflar o saldo.
   const saldoTotal = saldoGeral.totalEntradas - saldoGeral.totalSaidas - investimentosTotal;
@@ -108,6 +111,9 @@ const DashboardPage = () => {
       icon: TrendingUp,
       color: '#22c55e',
       bg: 'rgba(34, 197, 94, 0.12)',
+      details: devolucoesMesAtual > 0
+        ? [{ categoria: 'Devoluções a receber', valor: devolucoesMesAtual }]
+        : null,
     },
     {
       label: 'Saídas do Mês',
@@ -178,11 +184,42 @@ const DashboardPage = () => {
             { key: 'proximoMes', previsao: previsaoSaldo.proximoMes, titulo: 'Previsão de Saldo — Próximo Mês' },
           ].map(({ key, previsao, titulo }) => {
             const isPositivo = previsao.saldoFinal >= 0;
-            const pendentes = [
-              ...previsao.detalhes.receitasRecorrentesPendentes.map(r => ({ id: `receita-${r.id}`, tipo: 'ENTRADA', rotulo: r.nome, valor: r.valor })),
-              ...previsao.detalhes.despesasFixasPendentes.map(d => ({ id: `despesa-${d.id}`, tipo: 'SAIDA', rotulo: d.nome, valor: d.valor })),
-              ...previsao.detalhes.faturasCartao.map((f, i) => ({ id: `fatura-${i}`, tipo: 'SAIDA', rotulo: `Fatura ${f.nome}`, valor: f.valor })),
-            ];
+            // Contas do mês: as já quitadas continuam na lista (riscadas), as pendentes
+            // vêm primeiro e recebem destaque.
+            // Devoluções aparecem agrupadas por devedor — interessa o total que a pessoa
+            // deve no mês, não a descrição de cada dívida. Pendentes e já recebidas ficam
+            // em linhas separadas para preservar o risco/destaque de cada status.
+            const devolucoesPorDevedor = Object.values(
+              previsao.detalhes.devolucoes.reduce((acc, d) => {
+                // Três estados distintos por devedor: já lançado como transação,
+                // quitado em Empréstimos mas sem lançamento, e ainda em aberto.
+                const status = d.pago ? 'pago' : (d.quitado ? 'quitado' : 'pendente');
+                const chave = `${d.nome}||${status}`;
+                if (!acc[chave]) {
+                  acc[chave] = {
+                    id: `devolucao-${chave}`,
+                    tipo: 'ENTRADA',
+                    rotulo: `Devedor ${d.nome}`,
+                    valor: 0,
+                    pago: d.pago,
+                    quitado: d.quitado && !d.pago,
+                  };
+                }
+                acc[chave].valor += d.valor;
+                return acc;
+              }, {})
+            );
+
+            const contas = [
+              ...previsao.detalhes.receitasRecorrentes.map(r => ({ id: `receita-${r.id}`, tipo: 'ENTRADA', rotulo: r.nome, valor: r.valor, pago: r.pago })),
+              ...devolucoesPorDevedor,
+              ...previsao.detalhes.despesasFixas.map(d => ({ id: `despesa-${d.id}`, tipo: 'SAIDA', rotulo: d.nome, valor: d.valor, pago: d.pago })),
+              ...previsao.detalhes.faturasCartao.map((f, i) => ({ id: `fatura-${i}`, tipo: 'SAIDA', rotulo: `Fatura ${f.nome}`, valor: f.valor, pago: f.pago })),
+            ].sort((a, b) => {
+              const rank = (c) => (c.pago ? 2 : c.quitado ? 1 : 0);
+              return rank(a) - rank(b);
+            });
+            const qtdPendentes = contas.filter(c => !c.pago).length;
             const isExpanded = !!expandedPrevisao[key];
 
             return (
@@ -198,7 +235,7 @@ const DashboardPage = () => {
                   {formatCurrency(previsao.saldoFinal)}
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px', marginBottom: pendentes.length > 0 ? '14px' : 0 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px', marginBottom: contas.length > 0 ? '14px' : 0 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8' }}>
                     <span>Saldo Inicial</span>
                     <span>{formatCurrency(previsao.saldoInicial)}</span>
@@ -213,7 +250,7 @@ const DashboardPage = () => {
                   </div>
                 </div>
 
-                {pendentes.length > 0 && (
+                {contas.length > 0 && (
                   <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '10px' }}>
                     <button
                       onClick={() => setExpandedPrevisao(prev => ({ ...prev, [key]: !prev[key] }))}
@@ -231,23 +268,64 @@ const DashboardPage = () => {
                         color: '#94a3b8',
                       }}
                     >
-                      <span>Contas a pagar/receber ({pendentes.length})</span>
+                      <span>
+                        Contas a pagar/receber ({qtdPendentes} pendente{qtdPendentes === 1 ? '' : 's'} de {contas.length})
+                      </span>
                       {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                     </button>
 
                     {isExpanded && (
                       <div style={{ marginTop: '10px' }}>
-                        {pendentes.map((item) => (
-                          <div
-                            key={item.id}
-                            style={{ fontSize: '11px', color: '#94a3b8', display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}
-                          >
-                            <span>{item.rotulo} ({item.tipo === 'ENTRADA' ? 'a receber' : 'a pagar'}):</span>
-                            <span style={{ color: item.tipo === 'ENTRADA' ? '#22c55e' : '#ef4444' }}>
-                              {formatCurrency(item.valor)}
-                            </span>
-                          </div>
-                        ))}
+                        {contas.map((item) => {
+                          const isEntrada = item.tipo === 'ENTRADA';
+                          // Quitado em Empréstimos mas sem transação lançada: o dinheiro
+                          // não entrou no caixa, então continua contando como previsto.
+                          const semLancamento = !item.pago && item.quitado;
+                          const statusLabel = item.pago
+                            ? (isEntrada ? 'Recebido' : 'Pago')
+                            : semLancamento
+                              ? 'recebido, sem lançamento'
+                              : (isEntrada ? 'a receber' : 'a pagar');
+                          const riscado = item.pago ? 'line-through' : 'none';
+                          const corStatus = item.pago ? '#22c55e' : semLancamento ? '#f59e0b' : '#64748b';
+                          const corBorda = item.pago
+                            ? 'transparent'
+                            : semLancamento ? '#f59e0b' : (isEntrada ? '#22c55e' : '#ef4444');
+
+                          return (
+                            <div
+                              key={item.id}
+                              title={semLancamento ? 'Marcado como recebido em Empréstimos, mas sem transação de entrada lançada — segue contando como previsto' : undefined}
+                              style={{
+                                fontSize: '11px',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'baseline',
+                                gap: '8px',
+                                marginBottom: '5px',
+                                paddingLeft: '6px',
+                                borderLeft: `2px solid ${corBorda}`,
+                              }}
+                            >
+                              <span style={{ color: item.pago ? '#64748b' : '#e2e8f0', fontWeight: item.pago ? 400 : 600 }}>
+                                <span style={{ textDecoration: riscado }}>{item.rotulo}</span>{' '}
+                                <span style={{ color: corStatus, fontWeight: 600 }}>
+                                  ({statusLabel})
+                                </span>
+                              </span>
+                              <span
+                                style={{
+                                  whiteSpace: 'nowrap',
+                                  textDecoration: riscado,
+                                  fontWeight: item.pago ? 400 : 600,
+                                  color: item.pago ? '#64748b' : (isEntrada ? '#22c55e' : '#ef4444'),
+                                }}
+                              >
+                                {formatCurrency(item.valor)}
+                              </span>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -432,8 +510,16 @@ const DashboardPage = () => {
                 <div key={card.id} style={{ marginBottom: '16px', padding: '12px', background: 'rgba(15, 23, 42, 0.3)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.03)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '8px' }}>
                     <span style={{ fontWeight: 600, color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <CreditCard size={14} style={{ color: '#94a3b8' }}/> 
+                      <CreditCard size={14} style={{ color: '#94a3b8' }}/>
                       {card.nome}
+                      {card.faturaPaga && (
+                        <span
+                          className="badge badge-success"
+                          title="Existe uma transação de saída com o mesmo nome do cartão neste mês"
+                        >
+                          Paga
+                        </span>
+                      )}
                     </span>
                     <span style={{color: '#64748b', fontSize: '11px'}}>Venc. {card.vencimentoDia}</span>
                   </div>
@@ -443,7 +529,9 @@ const DashboardPage = () => {
                   </div>
                   
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
-                    <span style={{ color: barColor, fontWeight: 500 }}>Fatura: {formatCurrency(card.faturaAtual)}</span>
+                    <span style={{ color: card.faturaPaga ? '#64748b' : barColor, fontWeight: 500, textDecoration: card.faturaPaga ? 'line-through' : 'none' }}>
+                      Fatura: {formatCurrency(card.faturaAtual)}
+                    </span>
                     <span style={{ color: '#64748b' }}>Limite: {formatCurrency(card.limiteTotal)}</span>
                   </div>
                 </div>

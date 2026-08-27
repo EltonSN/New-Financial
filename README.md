@@ -65,9 +65,14 @@ CoreFin/
    NODE_ENV=development
    PORT=3001
    ```
-   Não há runner de migração — o schema é assumido como já existente no banco de destino (ver `structure/structure-*.sql` para o dump da estrutura atual). Alterações de schema feitas após o último dump ficam em `structure/migrations/*.sql` e precisam ser **aplicadas manualmente** no MySQL, por exemplo:
+   Não há runner de migração — o schema é assumido como já existente no banco de destino. O arquivo `structure/structure-<data>.sql` é um dump só de estrutura (`mysqldump --no-data`) e é a **fonte única** do schema atual: toda alteração é aplicada à mão no MySQL e depois refletida num dump novo, que substitui o anterior.
+
    ```bash
-   mysql -h <host> -u <user> -p <database> < structure/migrations/2026-08-15-create-house-expense.sql
+   # aplicar uma alteração de schema
+   mysql -h <host> -u <user> -p <database> < alteracao.sql
+
+   # regerar o dump depois de aplicar
+   mysqldump -h <host> -u <user> -p --no-data <database> > structure/structure-$(date +%d.%m.%Y).sql
    ```
 
 ## Rodando localmente
@@ -130,4 +135,14 @@ Além do CRUD padrão, `/api/loans` e `/api/house-expenses` expõem `POST /:id/p
 - Toda chamada à API do frontend passa por `ApiService.js` — não use `fetch` direto em componentes.
 - Estilos são objetos inline construídos a partir dos tokens em `constants/theme.js` — não há Tailwind nem CSS-in-JS.
 
-Para detalhes de arquitetura mais aprofundados, veja [`CLAUDE.md`](./CLAUDE.md). Para o histórico do que já foi construído e as decisões tomadas em cada etapa, veja [`memories.md`](./memories.md). Para o roadmap de melhorias e a estrutura de subagents sugerida para este projeto, veja [`BRIEFING.md`](./BRIEFING.md).
+Para os padrões de código a seguir ao mexer neste repositório, veja [`CLAUDE.md`](./CLAUDE.md).
+
+### O histórico e o backlog ficam fora do repositório
+
+O **histórico do que já foi construído**, as **decisões e seus porquês**, os **aprendizados** e o **roadmap de melhorias** vivem num vault Obsidian, em `Projetos/CoreFin - Pessoal/` — não neste repositório:
+
+```bash
+~/.claude/skills/cerebro/scripts/cerebro.sh ctx "CoreFin - Pessoal"
+```
+
+Os arquivos `memories.md` e `BRIEFING.md` cumpriam esse papel até **26/08/2026**, quando foram removidos: todo o conteúdo deles foi conferido item a item e já estava no vault, e os dois vinham acumulando informação desatualizada. Continuam recuperáveis pelo histórico do git. Item novo de backlog vai para `Melhorias/`, registro de sessão vai para `Histórico/` — não recrie um arquivo de memória aqui.

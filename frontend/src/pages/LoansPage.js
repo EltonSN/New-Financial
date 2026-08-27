@@ -149,12 +149,26 @@ const LoansPage = () => {
     return padrao;
   };
 
-  const isMesAtual = (date) => {
-    if (!date) return false;
+  const parseData = (date) => {
+    if (!date) return null;
     const str = String(date).trim().split('T')[0];
     const d = new Date(str + 'T00:00:00');
+    return isNaN(d.getTime()) ? null : d;
+  };
+
+  const isMesAtual = (date) => {
+    const d = parseData(date);
+    if (!d) return false;
     const hoje = new Date();
     return d.getFullYear() === hoje.getFullYear() && d.getMonth() === hoje.getMonth();
+  };
+
+  const isProximoMes = (date) => {
+    const d = parseData(date);
+    if (!d) return false;
+    const hoje = new Date();
+    const prox = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 1);
+    return d.getFullYear() === prox.getFullYear() && d.getMonth() === prox.getMonth();
   };
 
   const isAtrasado = (loan) => {
@@ -189,8 +203,38 @@ const LoansPage = () => {
 
   const totais = useMemo(() => {
     const doMes = loans.filter((l) => isMesAtual(l.data_limite));
+    const hoje = new Date();
+    const fimMesAtual = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
+
+    // Previsão do próximo mês = parcelas pendentes já lançadas para lá + projeção das
+    // correntes que continuam ativas. Trabalha pela cabeça de cada corrente (mesmo
+    // devedor + mesma descrição, parcela de maior número) e não só pelas pendentes:
+    // uma dívida fixa ou parcelada já quitada neste mês também gera parcela no mês que
+    // vem, mesmo que a linha da parcela seguinte ainda não exista no banco.
+    const cabecas = new Map();
+    loans.forEach((l) => {
+      const chave = `${String(l.nome_devedor || '').trim().toUpperCase()}||${String(l.descricao || '').trim().toUpperCase()}`;
+      const atual = cabecas.get(chave);
+      if (!atual || Number(l.parcela_atual) > Number(atual.parcela_atual)) {
+        cabecas.set(chave, l);
+      }
+    });
+
+    let proximoMes = loans
+      .filter((l) => !l.status_pago && isProximoMes(l.data_limite))
+      .reduce((acc, l) => acc + Number(l.valor), 0);
+
+    cabecas.forEach((l) => {
+      if (isProximoMes(l.data_limite)) return; // parcela já lançada, contada acima
+      const d = parseData(l.data_limite);
+      if (!d || d > fimMesAtual) return; // parcela de um mês mais à frente
+      const geraProxima = l.is_fixo || Number(l.parcela_atual) < Number(l.parcelas);
+      if (geraProxima) proximoMes += Number(l.valor);
+    });
+
     return {
       totalMes: doMes.reduce((acc, l) => acc + Number(l.valor), 0),
+      proximoMes,
       pagoMes: doMes.filter((l) => l.status_pago).reduce((acc, l) => acc + Number(l.valor), 0),
       pendenteMes: doMes.filter((l) => !l.status_pago).reduce((acc, l) => acc + Number(l.valor), 0),
       // Falta receber considerando as parcelas ainda não projetadas. Dívidas
@@ -243,6 +287,15 @@ const LoansPage = () => {
             <div style={{ fontSize: FONT.sizes.xs, color: COLORS.textMuted }}>Já pago no mês</div>
             <div style={{ fontSize: FONT.sizes.lg, fontWeight: FONT.weights.bold, color: COLORS.success }}>
               {formatCurrency(totais.pagoMes)}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: FONT.sizes.xs, color: COLORS.textMuted }}>A receber no próximo mês</div>
+            <div
+              style={{ fontSize: FONT.sizes.lg, fontWeight: FONT.weights.bold, color: COLORS.info }}
+              title="Parcelas já lançadas para o próximo mês, mais as fixas e as parceladas com parcela restante que serão geradas ao quitar as pendências deste mês"
+            >
+              {formatCurrency(totais.proximoMes)}
             </div>
           </div>
           <div>
