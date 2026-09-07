@@ -46,27 +46,47 @@ router.post('/', async (req, res) => {
   }
 });
 
-// PUT - Atualizar dados de um gasto da casa
+// PUT - Atualizar dados de um gasto da casa.
+//
+// Mesma divisão de `routes/loans.js`: um gasto é uma CORRENTE de linhas
+// identificada por `descricao + categoria` e a tela mostra só uma delas. Editar
+// apenas a linha clicada parte a corrente em duas — as parcelas antigas ficam com
+// a descrição velha, perdem a sucessora e o gasto aparece duplicado na lista.
+//   - identidade da corrente (`descricao`, `categoria`, `parcelas`) → em TODAS as
+//     linhas;
+//   - dados da parcela (`valor_mensal`, `parcela_atual`, `data_vencimento`,
+//     `status_pago`) → só na linha editada.
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { descricao, categoria, valor_mensal, parcelas, parcela_atual, data_vencimento, status_pago } = req.body;
+
+    const [rows] = await db.query('SELECT descricao, categoria FROM house_expense WHERE id = ?', [id]);
+    const atual = rows[0];
+
+    if (!atual) {
+      return res.status(404).json({ error: 'Gasto da casa não encontrado' });
+    }
+
+    const [resultCorrente] = await db.query(
+      `UPDATE house_expense
+       SET descricao = ?, categoria = ?, parcelas = ?
+       WHERE TRIM(UPPER(descricao)) = TRIM(UPPER(?))
+         AND TRIM(UPPER(COALESCE(categoria, 'Outros'))) = TRIM(UPPER(COALESCE(?, 'Outros')))`,
+      [descricao, categoria || 'Outros', parcelas || 1, atual.descricao, atual.categoria]
+    );
+
     await db.query(
       `UPDATE house_expense
-       SET descricao = ?, categoria = ?, valor_mensal = ?, parcelas = ?, parcela_atual = ?, data_vencimento = ?, status_pago = ?
+       SET valor_mensal = ?, parcela_atual = ?, data_vencimento = ?, status_pago = ?
        WHERE id = ?`,
-      [
-        descricao,
-        categoria || 'Outros',
-        valor_mensal,
-        parcelas || 1,
-        parcela_atual || 1,
-        data_vencimento,
-        status_pago ? 1 : 0,
-        id,
-      ]
+      [valor_mensal, parcela_atual || 1, data_vencimento, status_pago ? 1 : 0, id]
     );
-    res.json({ message: 'Gasto da casa atualizado com sucesso' });
+
+    res.json({
+      message: 'Gasto da casa atualizado com sucesso',
+      parcelasAtualizadas: resultCorrente.affectedRows,
+    });
   } catch (error) {
     console.error('Erro ao atualizar gasto da casa:', error);
     res.status(500).json({ error: 'Erro ao atualizar gasto da casa' });
@@ -127,12 +147,28 @@ router.post('/:id/reabrir', async (req, res) => {
   }
 });
 
-// DELETE - Excluir gasto da casa
+// DELETE - Excluir o gasto inteiro, ou seja, a CORRENTE toda
+// (`descricao + categoria`), não só a linha clicada — apagar uma linha só faz a
+// parcela anterior voltar a ser a cabeça da corrente e reaparecer na lista, com o
+// gasto parecendo não ter sido excluído. Mesma regra de `routes/loans.js`.
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    await db.query('DELETE FROM house_expense WHERE id = ?', [id]);
-    res.json({ message: 'Gasto da casa excluído com sucesso' });
+    const [rows] = await db.query('SELECT descricao, categoria FROM house_expense WHERE id = ?', [id]);
+    const gasto = rows[0];
+
+    if (!gasto) {
+      return res.status(404).json({ error: 'Gasto da casa não encontrado' });
+    }
+
+    const [result] = await db.query(
+      `DELETE FROM house_expense
+       WHERE TRIM(UPPER(descricao)) = TRIM(UPPER(?))
+         AND TRIM(UPPER(COALESCE(categoria, 'Outros'))) = TRIM(UPPER(COALESCE(?, 'Outros')))`,
+      [gasto.descricao, gasto.categoria]
+    );
+
+    res.json({ message: 'Gasto da casa excluído com sucesso', removidos: result.affectedRows });
   } catch (error) {
     console.error('Erro ao excluir gasto da casa:', error);
     res.status(500).json({ error: 'Erro ao excluir gasto da casa' });

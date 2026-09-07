@@ -8,6 +8,18 @@ import Select from '../components/ui/Select';
 import Card from '../components/ui/Card';
 import { COLORS, FONT } from '../constants/theme';
 
+// A metade do custo da casa é dívida da parceira e aparece como "Div. Casa" na
+// página de Empréstimos. Espelha DEVEDOR_DIVISAO_CASA / FRACAO_DIVISAO_CASA em
+// LoansPage.js e em api/routes/dashboard.js — a regra vive nos três lugares.
+const DEVEDOR_DIVISAO_CASA = 'Amor';
+const FRACAO_DIVISAO_CASA = 0.5;
+
+// Chave da corrente de parcelas: mesma compra = mesma descrição + mesma
+// categoria. Espelha o agrupamento de api/routes/houseExpenses.js, que é quem
+// edita e exclui a corrente inteira.
+const chaveCorrente = (gasto) =>
+  `${String(gasto.descricao || '').trim().toUpperCase()}||${String(gasto.categoria || 'Outros').trim().toUpperCase()}`;
+
 const CATEGORIAS = ['Reforma', 'Melhorias', 'Decoração', 'Manutenção', 'Móveis', 'Utensílios', 'Eletrodomésticos', 'Limpeza', 'Outros'];
 
 const CATEGORIA_OPTIONS = CATEGORIAS.map((c) => ({ value: c, label: c }));
@@ -92,8 +104,14 @@ const HousePage = () => {
     });
   };
 
+  // A API exclui a corrente inteira, não só a linha visível — apagar uma parcela
+  // só faz a anterior voltar a ser a cabeça e reaparecer na lista.
   const handleDelete = async (gasto) => {
-    if (!window.confirm(`Deseja realmente excluir "${gasto.descricao}"?`)) return;
+    const naCorrente = gastos.filter((g) => chaveCorrente(g) === chaveCorrente(gasto)).length;
+    const aviso = naCorrente > 1
+      ? `Excluir "${gasto.descricao}"?\n\nIsso remove as ${naCorrente} parcelas desse gasto, incluindo as já pagas.`
+      : `Deseja realmente excluir "${gasto.descricao}"?`;
+    if (!window.confirm(aviso)) return;
     try {
       await ApiService.deleteHouseExpense(gasto.id);
       loadGastos();
@@ -167,6 +185,21 @@ const HousePage = () => {
     return d < hoje;
   };
 
+  const parseData = (date) => {
+    if (!date) return null;
+    const str = String(date).trim().split('T')[0];
+    const d = new Date(str + 'T00:00:00');
+    return isNaN(d.getTime()) ? null : d;
+  };
+
+  const isProximoMes = (date) => {
+    const d = parseData(date);
+    if (!d) return false;
+    const hoje = new Date();
+    const prox = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 1);
+    return d.getFullYear() === prox.getFullYear() && d.getMonth() === prox.getMonth();
+  };
+
   const isMesFuturo = (date) => {
     if (!date) return false;
     const str = String(date).trim().split('T')[0];
@@ -185,7 +218,7 @@ const HousePage = () => {
   //   - senão a última parcela paga, marcada com `projetado` para indicar que a
   //     próxima já está agendada para o mês seguinte.
   const gastosProcessados = useMemo(() => {
-    const chaveDe = (g) => `${g.descricao}||${g.categoria || 'Outros'}`;
+    const chaveDe = chaveCorrente;
     const porChave = {};
     gastos.forEach((g) => {
       const chave = chaveDe(g);
@@ -244,8 +277,42 @@ const HousePage = () => {
 
   const totais = useMemo(() => {
     const doMes = gastos.filter((g) => isMesAtual(g.data_vencimento));
+    const custoMes = doMes.reduce((acc, g) => acc + Number(g.valor_mensal), 0);
+
+    // Custo do próximo mês: as parcelas já lançadas para lá mais as que só vão
+    // nascer quando as pendências deste mês forem quitadas. Parte da cabeça de
+    // cada corrente (descrição + categoria, parcela de maior número), a mesma
+    // regra que a página de Empréstimos usa para projetar as devoluções — é este
+    // número que alimenta a metade da parceira no mês que vem.
+    const hoje = new Date();
+    const fimMesAtual = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
+
+    const cabecas = new Map();
+    gastos.forEach((g) => {
+      const chave = chaveCorrente(g);
+      const atual = cabecas.get(chave);
+      if (!atual || Number(g.parcela_atual) > Number(atual.parcela_atual)) {
+        cabecas.set(chave, g);
+      }
+    });
+
+    let custoProximoMes = gastos
+      .filter((g) => isProximoMes(g.data_vencimento))
+      .reduce((acc, g) => acc + Number(g.valor_mensal), 0);
+
+    cabecas.forEach((g) => {
+      if (isProximoMes(g.data_vencimento)) return; // parcela já lançada, contada acima
+      const d = parseData(g.data_vencimento);
+      if (!d || d > fimMesAtual) return; // parcela de um mês mais à frente
+      if (Number(g.parcela_atual) >= Number(g.parcelas)) return; // corrente encerrada
+      custoProximoMes += Number(g.valor_mensal);
+    });
+
     return {
-      custoMes: doMes.reduce((acc, g) => acc + Number(g.valor_mensal), 0),
+      custoMes,
+      custoProximoMes,
+      divisaoMes: custoMes * FRACAO_DIVISAO_CASA,
+      divisaoProximoMes: custoProximoMes * FRACAO_DIVISAO_CASA,
       pagoMes: doMes.filter((g) => g.status_pago).reduce((acc, g) => acc + Number(g.valor_mensal), 0),
       pendenteMes: doMes.filter((g) => !g.status_pago).reduce((acc, g) => acc + Number(g.valor_mensal), 0),
       // Soma o que ainda falta pagar de todas as parcelas futuras já projetadas
@@ -322,6 +389,26 @@ const HousePage = () => {
             <div style={{ fontSize: FONT.sizes.xs, color: COLORS.textMuted }}>Já pago no mês</div>
             <div style={{ fontSize: FONT.sizes.lg, fontWeight: FONT.weights.bold, color: COLORS.success }}>
               {formatCurrency(totais.pagoMes)}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: FONT.sizes.xs, color: COLORS.textMuted }}>No próximo mês</div>
+            <div
+              style={{ fontSize: FONT.sizes.lg, fontWeight: FONT.weights.bold, color: COLORS.info }}
+              title="Parcelas já lançadas para o próximo mês, mais as que serão geradas ao quitar as pendências deste mês"
+            >
+              {formatCurrency(totais.custoProximoMes)}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: FONT.sizes.xs, color: COLORS.textMuted }}>
+              Divisão {DEVEDOR_DIVISAO_CASA} ({Math.round(FRACAO_DIVISAO_CASA * 100)}%)
+            </div>
+            <div
+              style={{ fontSize: FONT.sizes.lg, fontWeight: FONT.weights.bold, color: COLORS.success }}
+              title={`Metade do custo da casa, cobrada de ${DEVEDOR_DIVISAO_CASA} como "Div. Casa" na página de Empréstimos. Próximo mês: ${formatCurrency(totais.divisaoProximoMes)}`}
+            >
+              {formatCurrency(totais.divisaoMes)}
             </div>
           </div>
           <div>

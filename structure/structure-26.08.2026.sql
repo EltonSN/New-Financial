@@ -128,22 +128,6 @@ CREATE TABLE `investment` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Table structure for table `limite`
---
-
-DROP TABLE IF EXISTS `limite`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
- SET character_set_client = utf8mb4 ;
-CREATE TABLE `limite` (
-  `ID` int NOT NULL AUTO_INCREMENT,
-  `DATA` date NOT NULL,
-  `CARTAO` varchar(50) NOT NULL,
-  `LIMITE` decimal(10,2) NOT NULL,
-  PRIMARY KEY (`ID`)
-) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
 -- Table structure for table `loan`
 --
 

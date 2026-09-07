@@ -75,10 +75,23 @@ async function buscarReceitasRecorrentes({ ano, mes, start, end }) {
 //   - `quitado`: o `status_pago` marcado na página de Empréstimos. Serve de indicador
 //     de controle, mas NÃO desconta da previsão — marcar como pago ali não cria
 //     transação nenhuma, então esse dinheiro continua sendo esperado no mês.
-async function buscarDevolucoes({ start, end }) {
+//   - `atrasada`: a parcela venceu antes do período e continua em aberto.
+// `incluirAtrasadas` faz o atraso transbordar para o período: parcela pendente
+// que venceu num mês anterior continua sendo dinheiro esperado agora, então
+// entra na previsão do mês corrente. Só o mês atual pede isso — repetir no mês
+// seguinte contaria o mesmo valor duas vezes. Parcela vencida e já marcada como
+// quitada fica de fora: a corrente dela já gerou a parcela deste mês
+// (`garantirParcelasDoMes()` em routes/loans.js), e é essa que conta.
+async function buscarDevolucoes({ start, end, incluirAtrasadas = false }) {
+  const filtroPeriodo = incluirAtrasadas
+    ? '(l.data_limite BETWEEN ? AND ? OR (l.status_pago = 0 AND l.data_limite < ?))'
+    : 'l.data_limite BETWEEN ? AND ?';
+  const paramsPeriodo = incluirAtrasadas ? [start, end, start] : [start, end];
+
   const [rows] = await db.query(
     `SELECT l.id, l.nome_devedor, l.descricao, l.valor, l.parcela_atual, l.parcelas,
        l.status_pago AS quitado,
+       (l.data_limite < ?) AS atrasada,
        EXISTS (
          SELECT 1 FROM transactions t
          WHERE t.TIPO = 'ENTRADA'
@@ -86,9 +99,9 @@ async function buscarDevolucoes({ start, end }) {
            AND t.DATA BETWEEN ? AND ?
        ) AS pago
      FROM loan l
-     WHERE l.data_limite BETWEEN ? AND ?
+     WHERE ${filtroPeriodo}
      ORDER BY pago ASC, l.data_limite ASC, l.nome_devedor ASC`,
-    [start, end, start, end]
+    [start, start, end, ...paramsPeriodo]
   );
   return rows;
 }
@@ -145,6 +158,103 @@ function projetarDevolucoesProximoMes(loans, mesAtualRange, mesProxRange) {
     });
   }
   return projetadas;
+}
+
+// ---------- Divisão do custo da casa com a parceira ----------
+// O custo da casa (`house_expense`) é rateado meio a meio com a parceira, que já
+// existe em `loan` como o devedor DEVEDOR_DIVISAO_CASA. A metade dela NÃO é uma
+// linha em `loan`: é derivada de `house_expense` a cada leitura, porque a casa
+// muda de valor toda vez que uma compra é lançada ou uma parcela vira o mês —
+// manter uma corrente de parcelas espelhada em `loan` significaria sincronizar
+// duas tabelas a cada escrita da página Casa.
+// Entra na previsão como uma devolução comum e a baixa segue a mesma regra de
+// qualquer devolução (ADR-0004): só sai da previsão quando existe transação de
+// ENTRADA com o nome do devedor no período.
+// Espelhado no frontend por `divisaoCasa` em LoansPage.js e HousePage.js —
+// mexer aqui é mexer nos três.
+const DEVEDOR_DIVISAO_CASA = 'Amor';
+const DESCRICAO_DIVISAO_CASA = 'Div. Casa';
+const FRACAO_DIVISAO_CASA = 0.5;
+
+async function buscarGastosCasa() {
+  const [rows] = await db.query(
+    `SELECT id, descricao, categoria, valor_mensal, parcelas, parcela_atual, data_vencimento, status_pago
+     FROM house_expense`
+  );
+  return rows;
+}
+
+// Custo da casa no mês: toda parcela com vencimento no período, paga ou não —
+// é o mesmo valor que a página Casa mostra como "Custo Total da Casa · mês atual".
+// O rateio é sobre o custo do mês, não sobre o que sobrou a pagar.
+function totalCasaDoMes(gastos, range) {
+  return gastos
+    .filter((g) => {
+      const data = dataISO(g.data_vencimento);
+      return data >= range.start && data <= range.end;
+    })
+    .reduce((acc, g) => acc + Number(g.valor_mensal || 0), 0);
+}
+
+// Custo da casa no mês seguinte: as parcelas já lançadas para lá mais as que
+// ainda vão nascer quando as pendências deste mês forem quitadas. Mesma regra de
+// corrente das devoluções (`projetarDevolucoesProximoMes`), agrupando por
+// descrição + categoria e partindo da cabeça — a parcela de maior número.
+function totalCasaProximoMes(gastos, mesAtualRange, mesProxRange) {
+  let total = totalCasaDoMes(gastos, mesProxRange);
+
+  const cabecas = new Map();
+  for (const g of gastos) {
+    const chave = `${normalizarNome(g.descricao)}||${normalizarNome(g.categoria || 'Outros')}`;
+    const atual = cabecas.get(chave);
+    if (!atual || Number(g.parcela_atual) > Number(atual.parcela_atual)) {
+      cabecas.set(chave, g);
+    }
+  }
+
+  for (const g of cabecas.values()) {
+    const data = dataISO(g.data_vencimento);
+    if (data >= mesProxRange.start && data <= mesProxRange.end) continue; // já lançada
+    if (data > mesAtualRange.end) continue; // parcela de um mês mais à frente
+    if (Number(g.parcela_atual) >= Number(g.parcelas)) continue; // corrente encerrada
+    total += Number(g.valor_mensal || 0);
+  }
+
+  return total;
+}
+
+// Existe transação de ENTRADA com este nome no período? É o sinal de baixa da
+// divisão da casa, igual ao de qualquer devolução (ADR-0004).
+async function existeEntradaNoPeriodo(nome, { start, end }) {
+  const [rows] = await db.query(
+    `SELECT EXISTS (
+       SELECT 1 FROM transactions t
+       WHERE t.TIPO = 'ENTRADA'
+         AND TRIM(UPPER(t.DESCRICAO)) = TRIM(UPPER(?))
+         AND t.DATA BETWEEN ? AND ?
+     ) AS existe`,
+    [nome, start, end]
+  );
+  return !!Number(rows[0].existe);
+}
+
+// Devolução sintética com a metade do custo da casa. Array (vazio quando não há
+// custo) para poder ser espalhada na lista de devoluções do mês.
+function montarDivisaoCasa(totalCasa, pago) {
+  const valor = Number(totalCasa || 0) * FRACAO_DIVISAO_CASA;
+  if (!(valor > 0)) return [];
+  return [{
+    id: null,
+    origem: 'casa',
+    nome_devedor: DEVEDOR_DIVISAO_CASA,
+    descricao: DESCRICAO_DIVISAO_CASA,
+    valor,
+    parcela_atual: null,
+    parcelas: null,
+    quitado: 0,
+    atrasada: 0,
+    pago: pago ? 1 : 0,
+  }];
 }
 
 // Descrições (normalizadas) de transações de SAIDA lançadas no período. Serve para
@@ -248,12 +358,15 @@ async function calcularPrevisaoSaldo() {
     devolucoesAtual,
     devolucoesProxLancadas,
     loansTodos,
+    gastosCasa,
     totaisAtual,
     totaisProx,
     faturaCartoes,
     saidasDescricoesAtual,
     saidasDescricoesProx,
     investimentosTotal,
+    entradaDivisaoCasaAtual,
+    entradaDivisaoCasaProx,
   ] = await Promise.all([
     // Saldo acumulado antes do mês atual + qualquer lançamento de BALANCEAMENTO,
     // independente da data (é uma correção manual do saldo, não um fluxo do mês)
@@ -274,15 +387,18 @@ async function calcularPrevisaoSaldo() {
     buscarDespesasFixas(mesProxRange),
     buscarReceitasRecorrentes(mesAtualRange),
     buscarReceitasRecorrentes(mesProxRange),
-    buscarDevolucoes(mesAtualRange),
+    buscarDevolucoes({ ...mesAtualRange, incluirAtrasadas: true }),
     buscarDevolucoes(mesProxRange),
     buscarLoans(),
+    buscarGastosCasa(),
     buscarTotaisTransacoes(mesAtualRange),
     buscarTotaisTransacoes(mesProxRange),
     buscarFaturaCartoes(mesAtualRange, mesProxRange),
     buscarDescricoesSaidas(mesAtualRange),
     buscarDescricoesSaidas(mesProxRange),
     buscarInvestimentosTotal(),
+    existeEntradaNoPeriodo(DEVEDOR_DIVISAO_CASA, mesAtualRange),
+    existeEntradaNoPeriodo(DEVEDOR_DIVISAO_CASA, mesProxRange),
   ]);
 
   // Desconta o total aplicado em investimentos, já que essa saída de caixa nunca
@@ -303,6 +419,17 @@ async function calcularPrevisaoSaldo() {
   const faturasProx = montarFaturas('proximo', saidasDescricoesProx);
 
   const devolucoesProxProjetadas = projetarDevolucoesProximoMes(loansTodos, mesAtualRange, mesProxRange);
+
+  // Metade do custo da casa, cobrada da parceira nos dois meses. No próximo mês o
+  // rateio considera também as parcelas da casa que ainda não existem como linha.
+  const divisaoCasaAtual = montarDivisaoCasa(
+    totalCasaDoMes(gastosCasa, mesAtualRange),
+    entradaDivisaoCasaAtual
+  );
+  const divisaoCasaProx = montarDivisaoCasa(
+    totalCasaProximoMes(gastosCasa, mesAtualRange, mesProxRange),
+    entradaDivisaoCasaProx
+  );
 
   // Só o que ainda está pendente entra no cálculo; o que já foi pago/recebido
   // continua na lista de detalhes (riscado no dashboard) mas fora das previsões,
@@ -350,7 +477,9 @@ async function calcularPrevisaoSaldo() {
           parcelas: d.parcelas,
           pago: !!d.pago,
           quitado: !!d.quitado,
+          atrasada: !!d.atrasada,
           projetado: !!d.projetado,
+          origem: d.origem || null,
         })),
         faturasCartao: faturas,
         transacoesEntradas: totaisTransacoes.entradas,
@@ -365,7 +494,7 @@ async function calcularPrevisaoSaldo() {
     range: mesAtualRange,
     despesasFixas: despesasFixasAtual,
     receitas: receitasAtual,
-    devolucoes: devolucoesAtual,
+    devolucoes: [...devolucoesAtual, ...divisaoCasaAtual],
     faturas: faturasAtual,
     totaisTransacoes: totaisAtual,
     saldoInicial: saldoAnterior,
@@ -376,7 +505,7 @@ async function calcularPrevisaoSaldo() {
     despesasFixas: despesasFixasProx,
     receitas: receitasProx,
     // Parcelas já lançadas para o mês que vem + as que serão geradas ao quitar as pendências deste mês
-    devolucoes: [...devolucoesProxLancadas, ...devolucoesProxProjetadas],
+    devolucoes: [...devolucoesProxLancadas, ...devolucoesProxProjetadas, ...divisaoCasaProx],
     faturas: faturasProx,
     totaisTransacoes: totaisProx,
     saldoInicial: mesAtualResultado.saldoFinal,

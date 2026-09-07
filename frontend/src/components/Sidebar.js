@@ -40,7 +40,7 @@ const Sidebar = ({ currentPage, onNavigate }) => {
         </nav>
 
         <div className="sidebar-footer">
-          © 2026 CoreFin - v3.0.5
+          © 2026 CoreFin - v3.1.0
         </div>
       </aside>
 

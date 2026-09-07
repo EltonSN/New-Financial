@@ -2,8 +2,8 @@
 
 export const COLORS = {
   // Backgrounds
-  bgDeep: '#00e746ff',
-  bgPrimary: '#d91010ff',
+  bgDeep: '#0a0f1c',
+  bgPrimary: '#0f172a',
   bgSurface: 'rgba(15, 23, 42, 0.65)',
   bgSurfaceSolid: '#131b2e',
   bgHover: 'rgba(6, 182, 212, 0.08)',

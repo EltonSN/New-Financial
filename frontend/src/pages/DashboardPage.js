@@ -191,9 +191,14 @@ const DashboardPage = () => {
             // em linhas separadas para preservar o risco/destaque de cada status.
             const devolucoesPorDevedor = Object.values(
               previsao.detalhes.devolucoes.reduce((acc, d) => {
-                // Três estados distintos por devedor: já lançado como transação,
-                // quitado em Empréstimos mas sem lançamento, e ainda em aberto.
-                const status = d.pago ? 'pago' : (d.quitado ? 'quitado' : 'pendente');
+                // Quatro estados distintos por devedor: já lançado como transação,
+                // quitado em Empréstimos mas sem lançamento, em aberto, e em aberto
+                // vindo de um mês anterior (atrasado). Cada um em sua própria linha.
+                const status = d.pago
+                  ? 'pago'
+                  : d.quitado
+                    ? 'quitado'
+                    : (d.atrasada ? 'atrasado' : 'pendente');
                 const chave = `${d.nome}||${status}`;
                 if (!acc[chave]) {
                   acc[chave] = {
@@ -203,6 +208,7 @@ const DashboardPage = () => {
                     valor: 0,
                     pago: d.pago,
                     quitado: d.quitado && !d.pago,
+                    atrasada: d.atrasada && !d.pago && !d.quitado,
                   };
                 }
                 acc[chave].valor += d.valor;
@@ -216,7 +222,8 @@ const DashboardPage = () => {
               ...previsao.detalhes.despesasFixas.map(d => ({ id: `despesa-${d.id}`, tipo: 'SAIDA', rotulo: d.nome, valor: d.valor, pago: d.pago })),
               ...previsao.detalhes.faturasCartao.map((f, i) => ({ id: `fatura-${i}`, tipo: 'SAIDA', rotulo: `Fatura ${f.nome}`, valor: f.valor, pago: f.pago })),
             ].sort((a, b) => {
-              const rank = (c) => (c.pago ? 2 : c.quitado ? 1 : 0);
+              // Atrasado primeiro: é a conta que já deveria ter entrado.
+              const rank = (c) => (c.pago ? 3 : c.quitado ? 2 : c.atrasada ? 0 : 1);
               return rank(a) - rank(b);
             });
             const qtdPendentes = contas.filter(c => !c.pago).length;
@@ -281,21 +288,36 @@ const DashboardPage = () => {
                           // Quitado em Empréstimos mas sem transação lançada: o dinheiro
                           // não entrou no caixa, então continua contando como previsto.
                           const semLancamento = !item.pago && item.quitado;
+                          // Parcela de mês anterior que continua em aberto: o dinheiro
+                          // ainda é esperado, então transborda para a previsão deste mês.
+                          const atrasado = !item.pago && !item.quitado && item.atrasada;
                           const statusLabel = item.pago
                             ? (isEntrada ? 'Recebido' : 'Pago')
                             : semLancamento
                               ? 'recebido, sem lançamento'
-                              : (isEntrada ? 'a receber' : 'a pagar');
+                              : atrasado
+                                ? (isEntrada ? 'atrasado, a receber' : 'atrasado, a pagar')
+                                : (isEntrada ? 'a receber' : 'a pagar');
                           const riscado = item.pago ? 'line-through' : 'none';
-                          const corStatus = item.pago ? '#22c55e' : semLancamento ? '#f59e0b' : '#64748b';
+                          const corStatus = item.pago
+                            ? '#22c55e'
+                            : semLancamento ? '#f59e0b' : atrasado ? '#ef4444' : '#64748b';
                           const corBorda = item.pago
                             ? 'transparent'
-                            : semLancamento ? '#f59e0b' : (isEntrada ? '#22c55e' : '#ef4444');
+                            : semLancamento
+                              ? '#f59e0b'
+                              : atrasado ? '#ef4444' : (isEntrada ? '#22c55e' : '#ef4444');
 
                           return (
                             <div
                               key={item.id}
-                              title={semLancamento ? 'Marcado como recebido em Empréstimos, mas sem transação de entrada lançada — segue contando como previsto' : undefined}
+                              title={
+                                semLancamento
+                                  ? 'Marcado como recebido em Empréstimos, mas sem transação de entrada lançada — segue contando como previsto'
+                                  : atrasado
+                                    ? 'Venceu em um mês anterior e continua em aberto — segue contando como previsto neste mês'
+                                    : undefined
+                              }
                               style={{
                                 fontSize: '11px',
                                 display: 'flex',
