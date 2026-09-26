@@ -129,21 +129,45 @@ Tudo por variável de ambiente, sem editar o script:
 
 ### Antes: tire a chave SSH da pasta do Drive
 
-Hoje a chave está em `Documents\Create\ssh_key` — dentro da árvore que o Google
-Drive sincroniza, ou seja, **a chave privada está subindo para a nuvem**. Mova-a
-para fora e restrinja a permissão (o OpenSSH recusa chave que outros usuários
-possam ler):
+A chave ficava em `Documents\Create\ssh_key` — dentro da árvore que o Google
+Drive sincroniza, ou seja, **a chave privada subia para a nuvem**. Mova-a para
+fora e restrinja a permissão (o OpenSSH recusa chave que outros usuários possam
+ler).
+
+`ssh_key` é uma **pasta**, não a chave: dentro dela estão
+`ssh-key-2026-03-21.key` (a privada) e o `.pub`. O que vai para
+`.ssh\corefin_vm` é **só o arquivo `.key`**:
 
 ```powershell
-New-Item -ItemType Directory -Force "$env:USERPROFILE\.ssh" | Out-Null
-Move-Item "$env:USERPROFILE\Documents\Create\ssh_key" "$env:USERPROFILE\.ssh\corefin_vm"
+$ssh = "$env:USERPROFILE\.ssh"
+New-Item -ItemType Directory -Force $ssh | Out-Null
 
-icacls "$env:USERPROFILE\.ssh\corefin_vm" /inheritance:r
-icacls "$env:USERPROFILE\.ssh\corefin_vm" /grant:r "$($env:USERNAME):(R)"
+Move-Item "$env:USERPROFILE\Documents\Create\ssh_key\ssh-key-2026-03-21.key" "$ssh\corefin_vm"
+
+icacls "$ssh\corefin_vm" /inheritance:r
+icacls "$ssh\corefin_vm" /grant:r "$($env:USERNAME):(R)"
+
+# a chave sozinha, antes de envolver o script
+ssh -i "$ssh\corefin_vm" ubuntu@<IP_DA_VM> "echo ok"
 ```
 
-Esse caminho já é o padrão do script. Se preferir manter onde está, passe
-`-SshKey`.
+Confira com `Get-Item "$ssh\corefin_vm"`: a coluna `Mode` tem que começar com
+`-a` (arquivo), não com `d` (pasta). Depois apague a pasta `ssh_key` do Drive,
+para não ficar uma segunda cópia da chave privada sincronizando.
+
+Esse caminho já é o padrão do script. Se preferir manter a chave em outro lugar,
+passe `-SshKey` apontando para o **arquivo**.
+
+Se der errado:
+
+- **`Load key "...": Operation not supported on socket`** seguido de
+  `Permission denied (publickey)`: o caminho passado em `-i` é uma pasta. É o
+  sintoma de ter movido a pasta `ssh_key` inteira em vez do `.key`.
+- **`Move-Item`/`Remove-Item` com acesso negado**: o `icacls` acima foi aplicado
+  numa pasta, que ficou só com leitura. Copie o `.key` com `Copy-Item` (ler é
+  permitido) e aplique o `icacls` no arquivo novo. Para apagar a pasta travada:
+  `icacls <pasta> /reset /T`, `attrib -R <pasta>\* /S` e então
+  `Remove-Item <pasta> -Recurse`.
 
 ### Teste manual
 
@@ -228,5 +252,3 @@ A base de teste é mantida no fim para inspeção; apague quando terminar.
 - A porta 3306 da VM está aberta para a internet (é como a função da Vercel
   alcança o banco). Esta rotina não depende disso — o dump é local — mas o ponto
   segue aberto em `Melhorias/Segurança`.
-- O `Athena EPP Antivirus` já apagou arquivos dentro de `Documents\Create`.
-  Inclua `CoreFin-Backups` no pedido de exclusão ao TI (`Melhorias/DevOps`).

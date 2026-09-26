@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, Save, X, ChevronDown, ChevronUp, Check, CheckCheck, Edit2, Trash2, RotateCcw, FileText, Home } from 'lucide-react';
+import { Plus, Save, X, ChevronDown, ChevronUp, Check, CheckCheck, Edit2, Trash2, RotateCcw, FileText, Home, HandCoins } from 'lucide-react';
 import ApiService from '../services/ApiService';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
@@ -25,6 +25,18 @@ const chaveCorrente = (loan) =>
 const eDevedorDaCasa = (nome) =>
   String(nome || '').trim().toUpperCase() === DEVEDOR_DIVISAO_CASA.toUpperCase();
 
+// Quanto ainda falta receber da parcela: o valor dela menos os pagamentos
+// parciais (`valor_recebido`, somado pela API a partir das transações ligadas à
+// parcela). O item derivado da casa não tem parciais, então vale o valor cheio.
+// Em centavos para o arredondamento não deixar R$ 0,01 pendurado.
+const faltaReceber = (loan) =>
+  Math.max(Math.round(Number(loan.valor || 0) * 100) - Math.round(Number(loan.valor_recebido || 0) * 100), 0) / 100;
+
+const hojeISO = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
 const emptyForm = {
   nome_devedor: '',
   descricao: '',
@@ -41,11 +53,18 @@ const emptyForm = {
 const LoansPage = () => {
   const [loans, setLoans] = useState([]);
   const [gastosCasa, setGastosCasa] = useState([]);
+  // Já existe ENTRADA com o nome do devedor da casa neste mês? É o que dá baixa
+  // na divisão da casa, como na Previsão de Saldo.
+  const [divisaoCasaRecebida, setDivisaoCasaRecebida] = useState(false);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState(emptyForm);
   const [expanded, setExpanded] = useState({});
   const [extratoDevedor, setExtratoDevedor] = useState(null);
+  // Formulário de pagamento parcial, aberto dentro de um item por vez.
+  const [parcialId, setParcialId] = useState(null);
+  const [parcialForm, setParcialForm] = useState({ valor: '', data: '' });
+  const [salvandoParcial, setSalvandoParcial] = useState(false);
 
   useEffect(() => {
     loadLoans();
@@ -55,12 +74,14 @@ const LoansPage = () => {
     try {
       // Os gastos da casa entram nesta tela porque metade deles é dívida da
       // parceira (ver `divisaoCasa`): a lista dela depende das duas tabelas.
-      const [loansData, casaData] = await Promise.all([
+      const [loansData, casaData, baixaCasa] = await Promise.all([
         ApiService.getLoans(),
         ApiService.getHouseExpenses(),
+        ApiService.getBaixaPorNome(DEVEDOR_DIVISAO_CASA),
       ]);
       setLoans(loansData);
       setGastosCasa(casaData);
+      setDivisaoCasaRecebida(!!baixaCasa.mesAtual);
     } catch (error) {
       alert('Erro ao carregar empréstimos');
     } finally {
@@ -151,6 +172,50 @@ const LoansPage = () => {
       loadLoans();
     } catch (error) {
       alert('Erro ao marcar empréstimo como pago');
+    }
+  };
+
+  const abrirParcial = (loan) => {
+    setParcialId(loan.id);
+    setParcialForm({ valor: faltaReceber(loan).toFixed(2), data: hojeISO() });
+  };
+
+  const fecharParcial = () => {
+    setParcialId(null);
+    setParcialForm({ valor: '', data: '' });
+  };
+
+  // O parcial vira uma transação de ENTRADA (categoria DEVOLUCAO) ligada à
+  // parcela. Se ele fechar o valor da parcela, a API a quita e cria a seguinte.
+  const handleSalvarParcial = async (e, loan) => {
+    e.preventDefault();
+    const valor = Number(parcialForm.valor);
+    if (!(valor > 0)) return;
+    if (valor > faltaReceber(loan)) {
+      alert(`O valor passa do que falta desta parcela (${formatCurrency(faltaReceber(loan))}).`);
+      return;
+    }
+    setSalvandoParcial(true);
+    try {
+      await ApiService.addLoanPayment(loan.id, { valor, data: parcialForm.data });
+      fecharParcial();
+      loadLoans();
+    } catch (error) {
+      alert(error.message || 'Erro ao registrar pagamento parcial');
+    } finally {
+      setSalvandoParcial(false);
+    }
+  };
+
+  const handleExcluirParcial = async (loan, pagamento) => {
+    const aviso = `Excluir o pagamento de ${formatCurrency(pagamento.valor)} em ${formatDate(pagamento.data)}?\n\n`
+      + 'A transação de ENTRADA dele em Transações também será excluída.';
+    if (!window.confirm(aviso)) return;
+    try {
+      await ApiService.deleteLoanPayment(loan.id, pagamento.id);
+      loadLoans();
+    } catch (error) {
+      alert(error.message || 'Erro ao excluir pagamento parcial');
     }
   };
 
@@ -302,18 +367,27 @@ const LoansPage = () => {
         return acc + Number(g.valor_mensal) * restantes;
       }, 0);
 
+    // Parte do restante que vence neste mês. Se a metade do mês já foi recebida,
+    // ela sai do "Falta receber" — senão contaria de novo o que a parceira pagou.
+    const pendenteCasaMes = gastosCasa
+      .filter((g) => !g.status_pago && isMesAtual(g.data_vencimento))
+      .reduce((acc, g) => acc + Number(g.valor_mensal), 0);
+
     return {
       custoCasaMes: custoMes,
       valorMes: metade(custoMes),
       valorProximoMes: metade(custoProximoMes),
-      valorRestanteTotal: metade(restanteCasa),
+      valorRestanteTotal: metade(divisaoCasaRecebida ? restanteCasa - pendenteCasaMes : restanteCasa),
+      recebidaMes: divisaoCasaRecebida,
     };
-  }, [gastosCasa]);
+  }, [gastosCasa, divisaoCasaRecebida]);
 
   // A divisão da casa vira um item de dívida sintético, com `derivado` para as
   // telas não oferecerem ✓/editar/excluir num registro que não existe no banco.
-  // A baixa dele é a mesma de qualquer devolução (ADR-0004): lançar uma transação
-  // de ENTRADA com o nome do devedor. Por isso ele é sempre pendente aqui.
+  // A baixa dele é a mesma de qualquer devolução (ADR-0004): uma transação de
+  // ENTRADA com o nome do devedor no mês — a mesma que a Previsão de Saldo usa.
+  // Não depende do ✓ das parcelas na página Casa: aquilo é você pagando o cartão,
+  // não a parceira devolvendo a metade.
   const itemDivisaoCasa = useMemo(() => {
     if (!(divisaoCasa.valorMes > 0)) return null;
     return {
@@ -322,7 +396,7 @@ const LoansPage = () => {
       nome_devedor: DEVEDOR_DIVISAO_CASA,
       descricao: DESCRICAO_DIVISAO_CASA,
       valor: divisaoCasa.valorMes,
-      status_pago: 0,
+      status_pago: divisaoCasa.recebidaMes ? 1 : 0,
       is_fixo: 1,
       parcelas: 1,
       parcela_atual: 1,
@@ -398,11 +472,12 @@ const LoansPage = () => {
         // `todos` de propósito: `todos` é o que existe no banco e é o que as
         // ações em lote podem tocar.
         const derivados = itemDivisaoCasa && eDevedorDaCasa(nomeDevedor) ? [itemDivisaoCasa] : [];
+        const derivadosPendentes = derivados.filter((d) => !d.status_pago);
         const totalMesAtual = todos
           .filter((l) => !l.status_pago && contaNoMesAtual(l))
-          .reduce((acc, l) => acc + Number(l.valor), 0)
-          + derivados.reduce((acc, d) => acc + Number(d.valor), 0);
-        const pendentes = todos.filter((l) => !l.status_pago).length + derivados.length;
+          .reduce((acc, l) => acc + faltaReceber(l), 0)
+          + derivadosPendentes.reduce((acc, d) => acc + Number(d.valor), 0);
+        const pendentes = todos.filter((l) => !l.status_pago).length + derivadosPendentes.length;
         const itens = [...derivados, ...todos.filter((l) => l.visivel)];
 
         return { nomeDevedor, itens, todos, derivados, totalMesAtual, pendentes };
@@ -431,7 +506,7 @@ const LoansPage = () => {
 
     let proximoMes = loans
       .filter((l) => !l.status_pago && isProximoMes(l.data_limite))
-      .reduce((acc, l) => acc + Number(l.valor), 0);
+      .reduce((acc, l) => acc + faltaReceber(l), 0);
 
     cabecas.forEach((l) => {
       if (isProximoMes(l.data_limite)) return; // parcela já lançada, contada acima
@@ -446,16 +521,19 @@ const LoansPage = () => {
       // do mês como qualquer outra dívida, só que derivado de `house_expense`.
       totalMes: doMes.reduce((acc, l) => acc + Number(l.valor), 0) + divisaoCasa.valorMes,
       proximoMes: proximoMes + divisaoCasa.valorProximoMes,
-      pagoMes: doMes.filter((l) => l.status_pago).reduce((acc, l) => acc + Number(l.valor), 0),
-      pendenteMes: doMes.filter((l) => !l.status_pago).reduce((acc, l) => acc + Number(l.valor), 0)
-        + divisaoCasa.valorMes,
+      // Pago no mês = parcelas quitadas + o que já veio em parcial das pendentes.
+      pagoMes: doMes.reduce((acc, l) => acc + (l.status_pago ? Number(l.valor) : Number(l.valor_recebido || 0)), 0)
+        + (divisaoCasa.recebidaMes ? divisaoCasa.valorMes : 0),
+      pendenteMes: doMes.filter((l) => !l.status_pago).reduce((acc, l) => acc + faltaReceber(l), 0)
+        + (divisaoCasa.recebidaMes ? 0 : divisaoCasa.valorMes),
       // Falta receber considerando as parcelas ainda não projetadas. Dívidas
-      // fixas são perpétuas, então contam apenas a parcela em aberto.
+      // fixas são perpétuas, então contam apenas a parcela em aberto. Os parciais
+      // descontam só da parcela em aberto; as futuras nascem com o valor cheio.
       restanteTotal: loans
         .filter((l) => !l.status_pago)
         .reduce((acc, l) => {
           const restantes = l.is_fixo ? 1 : Math.max(Number(l.parcelas) - Number(l.parcela_atual) + 1, 1);
-          return acc + Number(l.valor) * restantes;
+          return acc + faltaReceber(l) + Number(l.valor) * (restantes - 1);
         }, 0) + divisaoCasa.valorRestanteTotal,
     };
   }, [loans, divisaoCasa]);
@@ -469,10 +547,10 @@ const LoansPage = () => {
       .sort((a, b) => new Date(a.data_limite) - new Date(b.data_limite));
     // A divisão da casa vem primeiro: é o item de maior valor no mês e o único
     // que o devedor não consegue conferir na lista de dívidas cadastradas.
-    return [...grupoExtrato.derivados, ...reais];
+    return [...grupoExtrato.derivados.filter((d) => !d.status_pago), ...reais];
   }, [grupoExtrato]);
 
-  const totalExtrato = extratoPendentes.reduce((acc, l) => acc + Number(l.valor), 0);
+  const totalExtrato = extratoPendentes.reduce((acc, l) => acc + faltaReceber(l), 0);
 
   return (
     <div className="animate-fade-in">
@@ -725,7 +803,9 @@ const LoansPage = () => {
                                 {loan.derivado ? (
                                   <span
                                     style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                                    title={`${Math.round(FRACAO_DIVISAO_CASA * 100)}% do custo da casa deste mês (${formatCurrency(divisaoCasa.custoCasaMes)}). Some ao lançar uma transação de ENTRADA com a descrição "${loan.nome_devedor}".`}
+                                    title={loan.status_pago
+                                      ? `${Math.round(FRACAO_DIVISAO_CASA * 100)}% do custo da casa deste mês (${formatCurrency(divisaoCasa.custoCasaMes)}). Recebido: existe uma transação de ENTRADA "${loan.nome_devedor}" neste mês.`
+                                      : `${Math.round(FRACAO_DIVISAO_CASA * 100)}% do custo da casa deste mês (${formatCurrency(divisaoCasa.custoCasaMes)}). Fica paga ao lançar uma transação de ENTRADA com a descrição "${loan.nome_devedor}".`}
                                   >
                                     <Home size={11} />
                                     Metade do custo da casa · automático
@@ -747,6 +827,13 @@ const LoansPage = () => {
                               <span className={`badge ${loan.status_pago ? 'badge-success' : 'badge-danger'}`}>
                                 {loan.status_pago ? 'Pago' : 'Pendente'}
                               </span>
+                              {!loan.status_pago && Number(loan.valor_recebido) > 0 && (
+                                <div style={{ fontSize: FONT.sizes.xs, color: COLORS.textMuted, marginTop: '4px', whiteSpace: 'nowrap' }}>
+                                  <span style={{ color: COLORS.success }}>Recebido {formatCurrency(loan.valor_recebido)}</span>
+                                  {' · falta '}
+                                  <strong style={{ color: COLORS.danger }}>{formatCurrency(faltaReceber(loan))}</strong>
+                                </div>
+                              )}
                             </div>
                           </div>
 
@@ -784,6 +871,15 @@ const LoansPage = () => {
                                     <Check size={16} />
                                   </button>
                                 )}
+                                {!loan.status_pago && (
+                                  <button
+                                    onClick={() => (parcialId === loan.id ? fecharParcial() : abrirParcial(loan))}
+                                    className="action-btn action-btn-edit"
+                                    title="Pagamento parcial"
+                                  >
+                                    <HandCoins size={16} />
+                                  </button>
+                                )}
                                 {loan.projetado && (
                                   <span title="Próxima parcela já projetada para o mês seguinte" style={{ color: '#64748b', display: 'inline-flex', alignItems: 'center', padding: '6px' }}>
                                     <RotateCcw size={14} />
@@ -806,6 +902,73 @@ const LoansPage = () => {
                               </div>
                             )}
                           </div>
+
+                          {parcialId === loan.id && (
+                            <form
+                              onSubmit={(e) => handleSalvarParcial(e, loan)}
+                              style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: '10px', marginTop: '12px', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.06)' }}
+                            >
+                              <div style={{ width: '120px' }}>
+                                <Input
+                                  label="Valor recebido"
+                                  type="number"
+                                  step="0.01"
+                                  min="0.01"
+                                  max={faltaReceber(loan).toFixed(2)}
+                                  value={parcialForm.valor}
+                                  onChange={(e) => setParcialForm({ ...parcialForm, valor: e.target.value })}
+                                  required
+                                />
+                              </div>
+                              <div style={{ width: '150px' }}>
+                                <Input
+                                  label="Data"
+                                  type="date"
+                                  value={parcialForm.data}
+                                  onChange={(e) => setParcialForm({ ...parcialForm, data: e.target.value })}
+                                  required
+                                />
+                              </div>
+                              <div style={{ display: 'flex', gap: '6px', paddingBottom: '12px' }}>
+                                <Button type="submit" icon={Save} disabled={salvandoParcial}>
+                                  Registrar
+                                </Button>
+                                <Button variant="secondary" onClick={fecharParcial} icon={X}>
+                                  Cancelar
+                                </Button>
+                              </div>
+                            </form>
+                          )}
+
+                          {/* Histórico dos pagamentos parciais desta parcela. Cada um é
+                              uma transação de ENTRADA; excluir aqui exclui a transação. */}
+                          {loan.pagamentos && loan.pagamentos.length > 0 && (
+                            <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                              <div style={{ fontSize: FONT.sizes.xs, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>
+                                Pagamentos parciais
+                              </div>
+                              {loan.pagamentos.map((pagamento) => (
+                                <div
+                                  key={pagamento.id}
+                                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', fontSize: '12px', color: COLORS.text, padding: '2px 0' }}
+                                >
+                                  <span>
+                                    <span style={{ color: COLORS.textMuted }}>{formatDate(pagamento.data)}</span>
+                                    {' · '}
+                                    <strong style={{ color: COLORS.success }}>{formatCurrency(pagamento.valor)}</strong>
+                                  </span>
+                                  <button
+                                    onClick={() => handleExcluirParcial(loan, pagamento)}
+                                    className="action-btn action-btn-delete"
+                                    title="Excluir este pagamento"
+                                    style={{ width: '26px', height: '26px' }}
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -893,12 +1056,17 @@ const LoansPage = () => {
                                 </>
                               )}
                               {' '}· Vence {formatDate(l.data_limite)}
+                              {Number(l.valor_recebido) > 0 && (
+                                <span style={{ color: COLORS.success }}>
+                                  {` · já pagou ${formatCurrency(l.valor_recebido)} de ${formatCurrency(l.valor)}`}
+                                </span>
+                              )}
                             </>
                           )}
                         </div>
                       </div>
                       <div style={{ fontSize: '14px', fontWeight: 700, color: '#e2e8f0', whiteSpace: 'nowrap' }}>
-                        {formatCurrency(l.valor)}
+                        {formatCurrency(faltaReceber(l))}
                       </div>
                     </div>
                   );

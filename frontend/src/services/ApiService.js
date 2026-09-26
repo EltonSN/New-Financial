@@ -16,7 +16,12 @@ class ApiService {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        // Leva a mensagem `error` da API junto, para a tela poder mostrar o motivo
+        // de uma recusa (400/409) em vez de um erro genérico.
+        const corpo = await response.json().catch(() => null);
+        const erro = new Error(corpo?.error || `HTTP error! status: ${response.status}`);
+        erro.status = response.status;
+        throw erro;
       }
 
       return await response.json();
@@ -103,6 +108,25 @@ class ApiService {
 
   static deleteLoan(id) {
     return this.request(`/loans/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Existe ENTRADA com este nome no mês atual (baixa por nome, ADR-0004)?
+  static getBaixaPorNome(nome) {
+    return this.request(`/loans/baixa?nome=${encodeURIComponent(nome)}`);
+  }
+
+  // Pagamento parcial: cria a transação de ENTRADA ligada à parcela
+  static addLoanPayment(id, data) {
+    return this.request(`/loans/${id}/pagamentos`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  static deleteLoanPayment(id, transacaoId) {
+    return this.request(`/loans/${id}/pagamentos/${transacaoId}`, {
       method: 'DELETE',
     });
   }

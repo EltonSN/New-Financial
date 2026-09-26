@@ -191,27 +191,32 @@ const DashboardPage = () => {
             // em linhas separadas para preservar o risco/destaque de cada status.
             const devolucoesPorDevedor = Object.values(
               previsao.detalhes.devolucoes.reduce((acc, d) => {
+                const somar = (status, valor) => {
+                  const chave = `${d.nome}||${status}`;
+                  if (!acc[chave]) {
+                    acc[chave] = {
+                      id: `devolucao-${chave}`,
+                      tipo: 'ENTRADA',
+                      rotulo: `Devedor ${d.nome}`,
+                      valor: 0,
+                      pago: status === 'pago',
+                      quitado: status === 'quitado',
+                      atrasada: status === 'atrasado',
+                    };
+                  }
+                  acc[chave].valor += valor;
+                };
                 // Quatro estados distintos por devedor: já lançado como transação,
                 // quitado em Empréstimos mas sem lançamento, em aberto, e em aberto
                 // vindo de um mês anterior (atrasado). Cada um em sua própria linha.
-                const status = d.pago
-                  ? 'pago'
-                  : d.quitado
-                    ? 'quitado'
-                    : (d.atrasada ? 'atrasado' : 'pendente');
-                const chave = `${d.nome}||${status}`;
-                if (!acc[chave]) {
-                  acc[chave] = {
-                    id: `devolucao-${chave}`,
-                    tipo: 'ENTRADA',
-                    rotulo: `Devedor ${d.nome}`,
-                    valor: 0,
-                    pago: d.pago,
-                    quitado: d.quitado && !d.pago,
-                    atrasada: d.atrasada && !d.pago && !d.quitado,
-                  };
+                // `valor` é o que ainda falta da parcela; o que já veio por pagamento
+                // parcial entra na linha de recebido do devedor.
+                if (d.pago) {
+                  somar('pago', d.valorOriginal ?? d.valor);
+                  return acc;
                 }
-                acc[chave].valor += d.valor;
+                if (d.recebido > 0) somar('pago', d.recebido);
+                somar(d.quitado ? 'quitado' : (d.atrasada ? 'atrasado' : 'pendente'), d.valor);
                 return acc;
               }, {})
             );

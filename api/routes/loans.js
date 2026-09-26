@@ -31,6 +31,51 @@ const geraProximaParcela = (loan) => !!loan.is_fixo || Number(loan.parcela_atual
 const chaveCorrente = (loan) =>
   `${String(loan.nome_devedor || '').trim().toUpperCase()}||${String(loan.descricao || '').trim().toUpperCase()}`;
 
+// Pagamento parcial. O parcial NÃO é uma coluna de `loan`: é a própria transação
+// de ENTRADA que o registra, ligada à parcela por `transactions.emprestimo_id`.
+// Assim o dinheiro recebido existe num lugar só — editar ou excluir a transação
+// na página Transações muda o histórico da dívida junto, sem sincronização. A
+// Previsão de Saldo desconta o parcial da parcela e ignora essas transações na
+// baixa por nome (routes/dashboard.js), senão um parcial do Fulano daria baixa
+// em todas as devoluções dele.
+const CATEGORIA_DEVOLUCAO = 'DEVOLUCAO';
+
+// Comparação de dinheiro em centavos inteiros — somar DECIMAL como float faz
+// 33.33 + 33.33 + 33.34 não fechar 100.00.
+const centavos = (valor) => Math.round(Number(valor || 0) * 100);
+
+async function totalRecebido(conn, loanId) {
+  const [rows] = await conn.query(
+    'SELECT COALESCE(SUM(VALOR), 0) AS recebido FROM transactions WHERE emprestimo_id = ?',
+    [loanId]
+  );
+  return Number(rows[0].recebido);
+}
+
+// Quita a parcela e cria a seguinte quando a corrente continua viva. Compartilhada
+// entre o ✓ (`/pagar`) e o parcial que completa o valor da parcela. `conn` é o
+// pool ou uma conexão com transação aberta.
+async function quitarParcela(conn, loan) {
+  await conn.query('UPDATE loan SET status_pago = 1 WHERE id = ?', [loan.id]);
+
+  if (!geraProximaParcela(loan)) return null;
+
+  const [result] = await conn.query(
+    `INSERT INTO loan (nome_devedor, descricao, valor, parcelas, parcela_atual, data_limite, is_fixo, status_pago)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 0)`,
+    [
+      loan.nome_devedor,
+      loan.descricao,
+      loan.valor,
+      loan.parcelas,
+      loan.parcela_atual + 1,
+      proximaDataLimite(loan.data_limite),
+      loan.is_fixo ? 1 : 0,
+    ]
+  );
+  return result.insertId;
+}
+
 // Virada de mês. Cada parcela é uma linha própria e a linha seguinte só nasce
 // quando a atual é quitada pelo endpoint /pagar — se o mês virar sem que isso
 // tenha acontecido (baixa feita direto no banco, dívida quitada antes de este
@@ -94,11 +139,64 @@ async function garantirParcelasDoMes() {
 router.get('/', async (req, res) => {
   try {
     await garantirParcelasDoMes();
-    const [rows] = await db.query('SELECT * FROM loan ORDER BY status_pago ASC, data_limite ASC');
-    res.json(rows);
+    const [[rows], [pagamentos]] = await Promise.all([
+      db.query('SELECT * FROM loan ORDER BY status_pago ASC, data_limite ASC'),
+      db.query(
+        `SELECT ID, emprestimo_id, DATA, VALOR FROM transactions
+         WHERE emprestimo_id IS NOT NULL
+         ORDER BY DATA ASC, ID ASC`
+      ),
+    ]);
+
+    // Cada parcela leva o histórico dos seus parciais e o total já recebido.
+    const porParcela = new Map();
+    for (const p of pagamentos) {
+      if (!porParcela.has(p.emprestimo_id)) porParcela.set(p.emprestimo_id, []);
+      porParcela.get(p.emprestimo_id).push({ id: p.ID, data: dataISO(p.DATA), valor: Number(p.VALOR) });
+    }
+
+    res.json(rows.map((loan) => {
+      const doLoan = porParcela.get(loan.id) || [];
+      const recebido = doLoan.reduce((acc, p) => acc + centavos(p.valor), 0) / 100;
+      return { ...loan, pagamentos: doLoan, valor_recebido: recebido };
+    }));
   } catch (error) {
     console.error('Erro ao buscar empréstimos:', error);
     res.status(500).json({ error: 'Erro ao buscar empréstimos' });
+  }
+});
+
+// GET - Existe transação de ENTRADA com este nome no mês atual? É a baixa por
+// nome (ADR-0004) que `routes/dashboard.js` aplica na previsão, exposta para a
+// página Empréstimos saber se a divisão da casa — que não tem linha em `loan` —
+// já foi recebida. Parciais (`emprestimo_id` preenchido) pagam a própria parcela
+// e não contam, mesma regra de `existeEntradaNoPeriodo()` no dashboard.
+router.get('/baixa', async (req, res) => {
+  try {
+    const nome = String(req.query.nome || '').trim();
+    if (!nome) {
+      return res.status(400).json({ error: 'Informe o nome' });
+    }
+
+    const hoje = new Date();
+    const inicio = dataISO(new Date(hoje.getFullYear(), hoje.getMonth(), 1));
+    const fim = dataISO(new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0));
+
+    const [rows] = await db.query(
+      `SELECT EXISTS (
+         SELECT 1 FROM transactions t
+         WHERE t.TIPO = 'ENTRADA'
+           AND t.emprestimo_id IS NULL
+           AND TRIM(UPPER(t.DESCRICAO)) = TRIM(UPPER(?))
+           AND t.DATA BETWEEN ? AND ?
+       ) AS existe`,
+      [nome, inicio, fim]
+    );
+
+    res.json({ nome, mesAtual: !!Number(rows[0].existe) });
+  } catch (error) {
+    console.error('Erro ao verificar baixa por nome:', error);
+    res.status(500).json({ error: 'Erro ao verificar baixa por nome' });
   }
 });
 
@@ -188,30 +286,158 @@ router.post('/:id/pagar', async (req, res) => {
       return res.json({ message: 'Empréstimo já estava quitado' });
     }
 
-    await db.query('UPDATE loan SET status_pago = 1 WHERE id = ?', [id]);
-
-    let proximoId = null;
-    if (geraProximaParcela(loan)) {
-      const [result] = await db.query(
-        `INSERT INTO loan (nome_devedor, descricao, valor, parcelas, parcela_atual, data_limite, is_fixo, status_pago)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 0)`,
-        [
-          loan.nome_devedor,
-          loan.descricao,
-          loan.valor,
-          loan.parcelas,
-          loan.parcela_atual + 1,
-          proximaDataLimite(loan.data_limite),
-          loan.is_fixo ? 1 : 0,
-        ]
-      );
-      proximoId = result.insertId;
-    }
+    const proximoId = await quitarParcela(db, loan);
 
     res.json({ message: 'Empréstimo marcado como pago', proximoId });
   } catch (error) {
     console.error('Erro ao marcar empréstimo como pago:', error);
     res.status(500).json({ error: 'Erro ao marcar empréstimo como pago' });
+  }
+});
+
+// POST - Registrar um pagamento parcial da parcela. Grava a transação de ENTRADA
+// (descrição = devedor, categoria DEVOLUCAO) ligada à parcela e, quando os
+// parciais somados fecham o valor dela, quita a parcela como o ✓ faria — o que
+// cria a parcela seguinte da corrente. Tudo numa transação do MySQL: não pode
+// sobrar entrada sem quitação, nem quitação sem entrada.
+router.post('/:id/pagamentos', async (req, res) => {
+  const { id } = req.params;
+  const { valor, data } = req.body;
+  const valorCentavos = centavos(valor);
+
+  if (!(valorCentavos > 0)) {
+    return res.status(400).json({ error: 'Informe um valor maior que zero' });
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(data || ''))) {
+    return res.status(400).json({ error: 'Informe a data do pagamento' });
+  }
+
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const [rows] = await conn.query('SELECT * FROM loan WHERE id = ? FOR UPDATE', [id]);
+    const loan = rows[0];
+    if (!loan) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Empréstimo não encontrado' });
+    }
+    if (loan.status_pago) {
+      await conn.rollback();
+      return res.status(400).json({ error: 'Esta parcela já está paga' });
+    }
+
+    const faltaCentavos = centavos(loan.valor) - centavos(await totalRecebido(conn, id));
+    if (valorCentavos > faltaCentavos) {
+      await conn.rollback();
+      return res.status(400).json({
+        error: `O valor passa do que falta desta parcela (R$ ${(faltaCentavos / 100).toFixed(2).replace('.', ',')})`,
+      });
+    }
+
+    // Sem a categoria cadastrada o parcial é gravado mesmo assim, sem categoria —
+    // perder o registro do dinheiro recebido seria pior.
+    const [categorias] = await conn.query(
+      'SELECT id FROM categories WHERE TRIM(UPPER(nome)) = ? LIMIT 1',
+      [CATEGORIA_DEVOLUCAO]
+    );
+
+    const [result] = await conn.query(
+      `INSERT INTO transactions (DATA, TIPO, categoria_id, DESCRICAO, VALOR, emprestimo_id)
+       VALUES (?, 'ENTRADA', ?, ?, ?, ?)`,
+      [data, categorias[0] ? categorias[0].id : null, loan.nome_devedor, valorCentavos / 100, id]
+    );
+
+    const quitada = valorCentavos === faltaCentavos;
+    const proximoId = quitada ? await quitarParcela(conn, loan) : null;
+
+    await conn.commit();
+    res.status(201).json({
+      id: result.insertId,
+      quitada,
+      proximoId,
+      message: quitada ? 'Pagamento registrado e parcela quitada' : 'Pagamento parcial registrado',
+    });
+  } catch (error) {
+    await conn.rollback().catch(() => {});
+    console.error('Erro ao registrar pagamento parcial:', error);
+    res.status(500).json({ error: 'Erro ao registrar pagamento parcial' });
+  } finally {
+    conn.release();
+  }
+});
+
+// DELETE - Excluir um pagamento parcial, ou seja, a transação de ENTRADA dele.
+//
+// Se foram os parciais que quitaram a parcela, tirar um deles a reabre — e a
+// parcela seguinte, criada na quitação, precisa sumir junto, senão a corrente
+// fica com duas pendentes. Só dá para desfazer isso enquanto a seguinte ainda
+// está intacta (pendente e sem parciais próprios); fora disso a exclusão é
+// recusada com 409 em vez de reescrever uma corrente que já andou.
+// Parcela quitada pelo ✓ (com parciais que não fechavam o valor) continua paga:
+// o ✓ é controle manual e não depende dos parciais.
+router.delete('/:id/pagamentos/:transacaoId', async (req, res) => {
+  const { id, transacaoId } = req.params;
+
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const [rows] = await conn.query('SELECT * FROM loan WHERE id = ? FOR UPDATE', [id]);
+    const loan = rows[0];
+    const [transacoes] = await conn.query(
+      'SELECT ID FROM transactions WHERE ID = ? AND emprestimo_id = ?',
+      [transacaoId, id]
+    );
+    if (!loan || transacoes.length === 0) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Pagamento não encontrado' });
+    }
+
+    let reaberta = false;
+    const quitadaPelosParciais = loan.status_pago
+      && centavos(await totalRecebido(conn, id)) >= centavos(loan.valor);
+
+    if (quitadaPelosParciais) {
+      const [seguintes] = await conn.query(
+        `SELECT l.id, l.status_pago,
+           (SELECT COUNT(*) FROM transactions t WHERE t.emprestimo_id = l.id) AS parciais
+         FROM loan l
+         WHERE TRIM(UPPER(l.nome_devedor)) = TRIM(UPPER(?))
+           AND TRIM(UPPER(COALESCE(l.descricao, ''))) = TRIM(UPPER(COALESCE(?, '')))
+           AND l.parcela_atual > ?`,
+        [loan.nome_devedor, loan.descricao, loan.parcela_atual]
+      );
+
+      const intacta = seguintes.length === 0
+        || (seguintes.length === 1 && !seguintes[0].status_pago && Number(seguintes[0].parciais) === 0);
+      if (!intacta) {
+        await conn.rollback();
+        return res.status(409).json({
+          error: 'A parcela seguinte desta dívida já recebeu pagamento. Desfaça os pagamentos dela antes de excluir este.',
+        });
+      }
+
+      if (seguintes.length === 1) {
+        await conn.query('DELETE FROM loan WHERE id = ?', [seguintes[0].id]);
+      }
+      await conn.query('UPDATE loan SET status_pago = 0 WHERE id = ?', [id]);
+      reaberta = true;
+    }
+
+    await conn.query('DELETE FROM transactions WHERE ID = ?', [transacaoId]);
+
+    await conn.commit();
+    res.json({
+      reaberta,
+      message: reaberta ? 'Pagamento excluído e parcela reaberta' : 'Pagamento excluído',
+    });
+  } catch (error) {
+    await conn.rollback().catch(() => {});
+    console.error('Erro ao excluir pagamento parcial:', error);
+    res.status(500).json({ error: 'Erro ao excluir pagamento parcial' });
+  } finally {
+    conn.release();
   }
 });
 

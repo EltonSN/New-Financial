@@ -76,6 +76,12 @@ async function buscarReceitasRecorrentes({ ano, mes, start, end }) {
 //     de controle, mas NÃO desconta da previsão — marcar como pago ali não cria
 //     transação nenhuma, então esse dinheiro continua sendo esperado no mês.
 //   - `atrasada`: a parcela venceu antes do período e continua em aberto.
+// Pagamento parcial (routes/loans.js) é uma transação de ENTRADA ligada à parcela
+// por `emprestimo_id`. Ela entra no caixa pelos totais de transações, então a
+// parcela passa a esperar só `valor − recebido` — e sai como `pago` quando os
+// parciais cobrem o valor inteiro. Essas transações ficam FORA da baixa por nome:
+// um parcial com a descrição "Fulano" não pode dar baixa nas outras devoluções do
+// Fulano (nem na divisão da casa, ver `existeEntradaNoPeriodo`).
 // `incluirAtrasadas` faz o atraso transbordar para o período: parcela pendente
 // que venceu num mês anterior continua sendo dinheiro esperado agora, então
 // entra na previsão do mês corrente. Só o mês atual pede isso — repetir no mês
@@ -92,9 +98,11 @@ async function buscarDevolucoes({ start, end, incluirAtrasadas = false }) {
     `SELECT l.id, l.nome_devedor, l.descricao, l.valor, l.parcela_atual, l.parcelas,
        l.status_pago AS quitado,
        (l.data_limite < ?) AS atrasada,
+       (SELECT COALESCE(SUM(p.VALOR), 0) FROM transactions p WHERE p.emprestimo_id = l.id) AS recebido,
        EXISTS (
          SELECT 1 FROM transactions t
          WHERE t.TIPO = 'ENTRADA'
+           AND t.emprestimo_id IS NULL
            AND TRIM(UPPER(t.DESCRICAO)) = TRIM(UPPER(l.nome_devedor))
            AND t.DATA BETWEEN ? AND ?
        ) AS pago
@@ -103,7 +111,20 @@ async function buscarDevolucoes({ start, end, incluirAtrasadas = false }) {
      ORDER BY pago ASC, l.data_limite ASC, l.nome_devedor ASC`,
     [start, start, end, ...paramsPeriodo]
   );
-  return rows;
+
+  // `valor` passa a ser o que ainda se espera receber da parcela; o valor cheio
+  // segue em `valorOriginal`. Comparação em centavos para o arredondamento do
+  // DECIMAL não deixar um resto de R$ 0,01 em aberto.
+  return rows.map((l) => {
+    const faltaCentavos = Math.round(Number(l.valor) * 100) - Math.round(Number(l.recebido) * 100);
+    return {
+      ...l,
+      valorOriginal: Number(l.valor),
+      recebido: Number(l.recebido),
+      valor: Math.max(faltaCentavos, 0) / 100,
+      pago: Number(l.pago) || faltaCentavos <= 0 ? 1 : 0,
+    };
+  });
 }
 
 async function buscarLoans() {
@@ -224,12 +245,14 @@ function totalCasaProximoMes(gastos, mesAtualRange, mesProxRange) {
 }
 
 // Existe transação de ENTRADA com este nome no período? É o sinal de baixa da
-// divisão da casa, igual ao de qualquer devolução (ADR-0004).
+// divisão da casa, igual ao de qualquer devolução (ADR-0004). Parcial de uma
+// dívida da parceira (`emprestimo_id` preenchido) paga aquela dívida, não a casa.
 async function existeEntradaNoPeriodo(nome, { start, end }) {
   const [rows] = await db.query(
     `SELECT EXISTS (
        SELECT 1 FROM transactions t
        WHERE t.TIPO = 'ENTRADA'
+         AND t.emprestimo_id IS NULL
          AND TRIM(UPPER(t.DESCRICAO)) = TRIM(UPPER(?))
          AND t.DATA BETWEEN ? AND ?
      ) AS existe`,
@@ -473,6 +496,8 @@ async function calcularPrevisaoSaldo() {
           nome: d.nome_devedor,
           descricao: d.descricao,
           valor: Number(d.valor),
+          valorOriginal: d.valorOriginal != null ? Number(d.valorOriginal) : Number(d.valor),
+          recebido: Number(d.recebido || 0),
           parcelaAtual: d.parcela_atual,
           parcelas: d.parcelas,
           pago: !!d.pago,
