@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Save, X, CreditCard, DollarSign, TrendingUp, TrendingDown } from 'lucide-react';
+import { Plus, Save, X, CreditCard, Tags, BanknoteArrowDown, BanknoteArrowUp, PiggyBank } from 'lucide-react';
 import ApiService from '../services/ApiService';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
@@ -305,11 +305,27 @@ const SettingsPage = ({ onDataUpdate }) => {
 
   const tabs = [
     { id: 'cards', label: 'Cartões', icon: CreditCard },
-    { id: 'categories', label: 'Categorias', icon: DollarSign },
-    { id: 'expenses', label: 'Despesas Fixas', icon: TrendingDown },
-    { id: 'incomes', label: 'Receitas Recorrentes', icon: TrendingUp },
-    { id: 'investments', label: 'Investimentos', icon: TrendingUp },
+    { id: 'categories', label: 'Categorias', icon: Tags },
+    { id: 'expenses', label: 'Despesas Fixas', icon: BanknoteArrowDown },
+    { id: 'incomes', label: 'Receitas Recorrentes', icon: BanknoteArrowUp },
+    { id: 'investments', label: 'Investimentos', icon: PiggyBank },
   ];
+
+  // Setas esquerda/direita, Home e End trocam de aba (padrão de tablist).
+  const aoTeclarAbas = (e) => {
+    const i = tabs.findIndex((t) => t.id === activeTab);
+    const alvo = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: tabs.length - 1 }[e.key];
+    if (alvo === undefined) return;
+    e.preventDefault();
+    const proxima = tabs[(alvo + tabs.length) % tabs.length];
+    setActiveTab(proxima.id);
+    document.getElementById(`aba-${proxima.id}`)?.focus();
+  };
+
+  // Em tela estreita o trilho rola: a aba ativa sempre volta para a área visível.
+  useEffect(() => {
+    document.getElementById(`aba-${activeTab}`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [activeTab]);
 
   const investmentTotalPages = Math.max(1, Math.ceil(investments.length / ITEMS_PER_PAGE));
   const investmentsPaginated = investments.slice(
@@ -324,25 +340,34 @@ const SettingsPage = ({ onDataUpdate }) => {
         <p className="page-subtitle">Gerencie cartões, categorias, despesas e investimentos</p>
       </div>
 
-      <div className="tabs-container">
+      <div className="segmentado" role="tablist" aria-label="Seções de configuração" onKeyDown={aoTeclarAbas}>
         {tabs.map(tab => {
           const Icon = tab.icon;
+          const ativa = activeTab === tab.id;
           return (
             <button
               key={tab.id}
+              id={`aba-${tab.id}`}
+              role="tab"
+              aria-selected={ativa}
+              aria-controls="painel-config"
+              tabIndex={ativa ? 0 : -1}
               onClick={() => setActiveTab(tab.id)}
-              className={`tab-btn ${activeTab === tab.id ? 'active' : ''}`}
+              title={tab.label}
+              className={`segmentado-item ${ativa ? 'is-ativo' : ''}`}
             >
-              <Icon size={16} />
-              {tab.label}
+              <Icon size={18} strokeWidth={1.7} aria-hidden="true" />
+              <span>{tab.label}</span>
             </button>
           );
         })}
       </div>
 
+      <div id="painel-config" role="tabpanel" aria-labelledby={`aba-${activeTab}`}>
+
       {activeTab === 'cards' && (
-        <>
-          <Card title="Cadastro de Cartões">
+        <div className="config-layout">
+          <Card className="config-form" title="Cadastro de Cartões">
             <form onSubmit={handleCardSubmit}>
               <div className="form-grid">
                 <Input
@@ -417,12 +442,12 @@ const SettingsPage = ({ onDataUpdate }) => {
               onDelete={handleDeleteCard}
             />
           </Card>
-        </>
+        </div>
       )}
 
       {activeTab === 'categories' && (
-        <>
-          <Card title="Cadastro de Categorias">
+        <div className="config-layout">
+          <Card className="config-form" title="Cadastro de Categorias">
             <form onSubmit={handleCategorySubmit}>
               <Input
                 label="Nome da Categoria"
@@ -457,12 +482,12 @@ const SettingsPage = ({ onDataUpdate }) => {
               onDelete={handleDeleteCategory}
             />
           </Card>
-        </>
+        </div>
       )}
 
       {activeTab === 'expenses' && (
-        <>
-          <Card title="Cadastro de Despesas Fixas">
+        <div className="config-layout">
+          <Card className="config-form" title="Cadastro de Despesas Fixas">
             <form onSubmit={handleExpenseSubmit}>
               <div className="form-grid">
                 <Input
@@ -516,12 +541,12 @@ const SettingsPage = ({ onDataUpdate }) => {
               onDelete={handleDeleteExpense}
             />
           </Card>
-        </>
+        </div>
       )}
 
       {activeTab === 'incomes' && (
-        <>
-          <Card title="Cadastro de Receitas Recorrentes">
+        <div className="config-layout">
+          <Card className="config-form" title="Cadastro de Receitas Recorrentes">
             <form onSubmit={handleIncomeSubmit}>
               <div className="form-grid">
                 <Input
@@ -575,12 +600,12 @@ const SettingsPage = ({ onDataUpdate }) => {
               onDelete={handleDeleteIncome}
             />
           </Card>
-        </>
+        </div>
       )}
 
       {activeTab === 'investments' && (
-        <>
-          <Card title="Cadastro de Investimentos">
+        <div className="config-layout">
+          <Card className="config-form" title="Cadastro de Investimentos">
             <form onSubmit={handleInvestmentSubmit}>
               <div className="form-grid">
                 <Input
@@ -649,8 +674,9 @@ const SettingsPage = ({ onDataUpdate }) => {
               itemsPerPage={ITEMS_PER_PAGE}
             />
           </Card>
-        </>
+        </div>
       )}
+      </div>
     </div>
   );
 };

@@ -3,13 +3,18 @@
   "name": "CoreFin - Sistema de Controle Financeiro Pessoal",
   "icons": [
     {
-      "src": "logo.png",
+      "src": "brand/corefin-app-icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any"
+    },
+    {
+      "src": "brand/corefin-app-icon-512.png",
       "type": "image/png",
-      "sizes": "192x192 512x512"
+      "sizes": "512x512"
     }
   ],
   "start_url": ".",
   "display": "standalone",
-  "theme_color": "#0a0e1a",
-  "background_color": "#0a0e1a"
+  "theme_color": "#0A0A0B",
+  "background_color": "#0A0A0B"
 }

@@ -1,17 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Save, X } from 'lucide-react';
+import { Plus, Save, X, TrendingUp, TrendingDown } from 'lucide-react';
 import ApiService from '../services/ApiService';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import Select from '../components/ui/Select';
+import Switch from '../components/ui/Switch';
 import Card from '../components/ui/Card';
 import Table from '../components/ui/Table';
 import Pagination from '../components/Pagination';
+import { COLORS } from '../constants/theme';
 
 const TRANSACTION_TYPES = {
   ENTRADA: 'ENTRADA',
   SAIDA: 'SAIDA'
 };
+
+// Opções da chave de Tipo, na ordem em que aparecem (Entrada à esquerda).
+const OPCOES_TIPO = [
+  { value: TRANSACTION_TYPES.ENTRADA, label: 'Entrada', icon: TrendingUp, tom: 'entrada' },
+  { value: TRANSACTION_TYPES.SAIDA, label: 'Saída', icon: TrendingDown, tom: 'saida' },
+];
 
 const ITEMS_PER_PAGE = 15;
 
@@ -25,7 +33,7 @@ const TransactionsPage = ({ categories }) => {
   const [filterMonth, setFilterMonth] = useState('');
   const [formData, setFormData] = useState({
     DATA: new Date().toISOString().split('T')[0],
-    TIPO: '',
+    TIPO: TRANSACTION_TYPES.SAIDA, // a chave sempre tem um lado; Saída é o caso comum
     categoria_id: '',
     DESCRICAO: '',
     VALOR: '',
@@ -136,7 +144,7 @@ const TransactionsPage = ({ categories }) => {
       field: 'VALOR',
       render: (row) => (
         <span style={{
-          color: row.TIPO === 'ENTRADA' ? '#10B981' : '#EF4444',
+          color: row.TIPO === 'ENTRADA' ? COLORS.success : COLORS.danger,
           fontWeight: '600',
         }}>
           {row.TIPO === 'ENTRADA' ? '+' : '-'}{formatCurrency(row.VALOR)}
@@ -214,12 +222,11 @@ const TransactionsPage = ({ categories }) => {
               onChange={(e) => setFormData({ ...formData, DATA: e.target.value })}
               required
             />
-            <Select
+            <Switch
               label="Tipo"
+              opcoes={OPCOES_TIPO}
               value={formData.TIPO}
               onChange={(e) => setFormData({ ...formData, TIPO: e.target.value })}
-              options={Object.values(TRANSACTION_TYPES).map(t => ({ value: t, label: t }))}
-              required
             />
             <Select
               label="Categoria"
@@ -253,7 +260,7 @@ const TransactionsPage = ({ categories }) => {
               </Button>
             )}
             {showSuccess && (
-              <span style={{ color: '#10B981', fontWeight: '500', marginLeft: '0.5rem', animation: 'fadeIn 0.3s' }}>
+              <span style={{ color: COLORS.success, fontWeight: '500', marginLeft: '0.5rem', animation: 'fadeIn 0.3s' }}>
                 ✓ Transação salva!
               </span>
             )}
@@ -269,12 +276,12 @@ const TransactionsPage = ({ categories }) => {
           <div style={{ flex: '1 1 200px' }}>
             <Input
               type="text"
-              placeholder="Buscar por descrição, valor ou categoria..."
+              placeholder="Buscar por descrição, valor ou categoria…"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <div style={{ width: '160px' }}>
+          <div style={{ width: '184px' }}>
             <Select
               value={filterYear}
               onChange={(e) => setFilterYear(e.target.value)}
@@ -282,7 +289,7 @@ const TransactionsPage = ({ categories }) => {
               placeholder="Todos os Anos"
             />
           </div>
-          <div style={{ width: '160px' }}>
+          <div style={{ width: '184px' }}>
             <Select
               value={filterMonth}
               onChange={(e) => setFilterMonth(e.target.value)}
@@ -293,7 +300,7 @@ const TransactionsPage = ({ categories }) => {
         </div>
         
         {loading ? (
-          <p className="loading-text">Carregando...</p>
+          <p className="loading-text">Carregando…</p>
         ) : (
           <>
             <Table

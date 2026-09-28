@@ -1,5 +1,6 @@
 import React from 'react';
 import { Edit2, Trash2 } from 'lucide-react';
+import { COLORS } from '../../constants/theme';
 
 // `rowStyle` é opcional: recebe (row, index) e devolve um style aplicado ao <tr>.
 // Usado pela página Cartões para destacar as faturas do mês atual e apagar as antigas.
@@ -28,7 +29,7 @@ const Table = ({ columns, data, onEdit, onDelete, rowStyle }) => (
               style={{
                 padding: '40px',
                 textAlign: 'center',
-                color: '#156feeff',
+                color: COLORS.textMuted,
                 fontSize: '14px',
               }}
             >
@@ -51,6 +52,7 @@ const Table = ({ columns, data, onEdit, onDelete, rowStyle }) => (
                         onClick={() => onEdit(row)}
                         className="action-btn action-btn-edit"
                         title="Editar"
+                        aria-label="Editar"
                       >
                         <Edit2 size={16} />
                       </button>
@@ -60,6 +62,7 @@ const Table = ({ columns, data, onEdit, onDelete, rowStyle }) => (
                         onClick={() => onDelete(row)}
                         className="action-btn action-btn-delete"
                         title="Excluir"
+                        aria-label="Excluir"
                       >
                         <Trash2 size={16} />
                       </button>

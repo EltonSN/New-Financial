@@ -277,7 +277,7 @@ const CardsPage = ({ cards }) => {
         subtitle={`Última atualização: ${ultimaAtualizacao ? ultimaAtualizacao.toLocaleString('pt-BR') : '-'}`}
       >
         {loading ? (
-          <p className="loading-text">Carregando...</p>
+          <p className="loading-text">Carregando…</p>
         ) : (
           <>
             <Table

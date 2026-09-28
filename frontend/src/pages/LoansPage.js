@@ -565,7 +565,7 @@ const LoansPage = () => {
           <div style={{ fontSize: FONT.sizes.xs, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
             Total a Receber · mês atual
           </div>
-          <div style={{ fontSize: FONT.sizes.xxl, fontWeight: FONT.weights.bold, color: COLORS.text, lineHeight: 1.2 }}>
+          <div className="valor-destaque" style={{ fontSize: FONT.sizes.xxl, fontWeight: FONT.weights.bold, color: COLORS.text, lineHeight: 1.2 }}>
             {formatCurrency(totais.totalMes)}
           </div>
           {divisaoCasa.valorMes > 0 && (
@@ -689,7 +689,7 @@ const LoansPage = () => {
                   type="checkbox"
                   checked={formData.is_fixo}
                   onChange={(e) => setFormData({ ...formData, is_fixo: e.target.checked })}
-                  style={{ width: '16px', height: '16px', accentColor: '#06b6d4' }}
+                  style={{ width: '16px', height: '16px', accentColor: COLORS.primary }}
                 />
                 Fixo
               </label>
@@ -710,7 +710,7 @@ const LoansPage = () => {
       </Card>
 
       {loading ? (
-        <p className="loading-text">Carregando...</p>
+        <p className="loading-text">Carregando…</p>
       ) : grupos.length === 0 ? (
         <Card>
           <p className="loading-text">Nenhum empréstimo cadastrado.</p>
@@ -724,13 +724,13 @@ const LoansPage = () => {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px' }}>
                   <div>
                     <h3 className="glass-card-title m-0">{grupo.nomeDevedor}</h3>
-                    <p style={{ fontSize: '12px', color: '#64748b', margin: '4px 0 0 0' }}>
+                    <p style={{ fontSize: '12px', color: COLORS.textMuted, margin: '4px 0 0 0' }}>
                       {grupo.pendentes} {grupo.pendentes === 1 ? 'pendência' : 'pendências'}
                     </p>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '11px', color: '#64748b' }}>Total pendente (mês atual)</div>
-                    <div style={{ fontSize: '20px', fontWeight: 700, color: grupo.totalMesAtual > 0 ? '#ef4444' : '#22c55e' }}>
+                    <div style={{ fontSize: '11px', color: COLORS.textMuted }}>Total pendente (mês atual)</div>
+                    <div style={{ fontSize: '20px', fontWeight: 700, color: grupo.totalMesAtual > 0 ? COLORS.danger : COLORS.success }}>
                       {formatCurrency(grupo.totalMesAtual)}
                     </div>
                   </div>
@@ -768,13 +768,13 @@ const LoansPage = () => {
                     width: '100%',
                     background: 'none',
                     border: 'none',
-                    borderTop: '1px solid rgba(255,255,255,0.06)',
+                    borderTop: `1px solid ${COLORS.border}`,
                     marginTop: '16px',
                     paddingTop: '12px',
                     cursor: 'pointer',
                     fontSize: '12px',
                     fontWeight: 600,
-                    color: '#94a3b8',
+                    color: COLORS.textSecondary,
                   }}
                 >
                   <span>Ver detalhes ({grupo.itens.length})</span>
@@ -791,15 +791,15 @@ const LoansPage = () => {
                           key={loan.id}
                           style={{
                             padding: '12px',
-                            background: 'rgba(15, 23, 42, 0.3)',
+                            background: COLORS.inputBg,
                             borderRadius: '12px',
-                            border: `1px solid ${atrasado ? 'rgba(239, 68, 68, 0.3)' : 'rgba(255,255,255,0.03)'}`,
+                            border: `1px solid ${atrasado ? COLORS.dangerBorder : COLORS.borderSubtle}`,
                           }}
                         >
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px' }}>
                             <div>
-                              <div style={{ fontSize: '13px', fontWeight: 600, color: '#e2e8f0' }}>{loan.descricao}</div>
-                              <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                              <div style={{ fontSize: '13px', fontWeight: 600, color: COLORS.text }}>{loan.descricao}</div>
+                              <div style={{ fontSize: '11px', color: COLORS.textMuted, marginTop: '2px' }}>
                                 {loan.derivado ? (
                                   <span
                                     style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
@@ -813,7 +813,7 @@ const LoansPage = () => {
                                 ) : (
                                   <>
                                     Vence em {formatDate(loan.data_limite)}
-                                    {atrasado && <span style={{ color: '#ef4444', fontWeight: 600 }}> · Atrasado</span>}
+                                    {atrasado && <span style={{ color: COLORS.danger, fontWeight: 600 }}> · Atrasado</span>}
                                     {loan.is_fixo && <span> · Fixo</span>}
                                     {loan.projetado && <span> · Próxima parcela projetada</span>}
                                   </>
@@ -821,7 +821,7 @@ const LoansPage = () => {
                               </div>
                             </div>
                             <div style={{ textAlign: 'right' }}>
-                              <div style={{ fontSize: '15px', fontWeight: 700, color: '#e2e8f0' }}>
+                              <div style={{ fontSize: '15px', fontWeight: 700, color: COLORS.text }}>
                                 {formatCurrency(loan.valor)}
                               </div>
                               <span className={`badge ${loan.status_pago ? 'badge-success' : 'badge-danger'}`}>
@@ -838,7 +838,7 @@ const LoansPage = () => {
                           </div>
 
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px' }}>
-                            <div style={{ fontSize: '11px', color: '#64748b' }}>
+                            <div style={{ fontSize: '11px', color: COLORS.textMuted }}>
                               {loan.derivado ? (
                                 `Calculado da página Casa (${Math.round(FRACAO_DIVISAO_CASA * 100)}% de ${formatCurrency(divisaoCasa.custoCasaMes)})`
                               ) : loan.is_fixo ? (
@@ -881,7 +881,7 @@ const LoansPage = () => {
                                   </button>
                                 )}
                                 {loan.projetado && (
-                                  <span title="Próxima parcela já projetada para o mês seguinte" style={{ color: '#64748b', display: 'inline-flex', alignItems: 'center', padding: '6px' }}>
+                                  <span title="Próxima parcela já projetada para o mês seguinte" style={{ color: COLORS.textMuted, display: 'inline-flex', alignItems: 'center', padding: '6px' }}>
                                     <RotateCcw size={14} />
                                   </span>
                                 )}
@@ -906,7 +906,7 @@ const LoansPage = () => {
                           {parcialId === loan.id && (
                             <form
                               onSubmit={(e) => handleSalvarParcial(e, loan)}
-                              style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: '10px', marginTop: '12px', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.06)' }}
+                              style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: '10px', marginTop: '12px', paddingTop: '12px', borderTop: `1px solid ${COLORS.border}` }}
                             >
                               <div style={{ width: '120px' }}>
                                 <Input
@@ -943,7 +943,7 @@ const LoansPage = () => {
                           {/* Histórico dos pagamentos parciais desta parcela. Cada um é
                               uma transação de ENTRADA; excluir aqui exclui a transação. */}
                           {loan.pagamentos && loan.pagamentos.length > 0 && (
-                            <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                            <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: `1px solid ${COLORS.border}` }}>
                               <div style={{ fontSize: FONT.sizes.xs, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>
                                 Pagamentos parciais
                               </div>
@@ -983,10 +983,11 @@ const LoansPage = () => {
       {grupoExtrato && createPortal(
         <div
           onClick={() => setExtratoDevedor(null)}
+          className="modal-overlay"
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(0, 0, 0, 0.6)',
+            background: COLORS.overlay,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -996,19 +997,21 @@ const LoansPage = () => {
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="glass-card"
+            className="glass-card glass-card--modal"
+            role="dialog"
+            aria-modal="true"
             style={{ maxWidth: '480px', width: '100%', maxHeight: '85vh', overflowY: 'auto', padding: '24px', marginBottom: 0 }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px' }}>
               <div>
                 <h3 className="glass-card-title m-0">{grupoExtrato.nomeDevedor}</h3>
-                <p style={{ fontSize: '12px', color: '#64748b', margin: '4px 0 0 0' }}>
+                <p style={{ fontSize: '12px', color: COLORS.textMuted, margin: '4px 0 0 0' }}>
                   Emitido em {new Date().toLocaleDateString('pt-BR')}
                 </p>
               </div>
               <button
                 onClick={() => setExtratoDevedor(null)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: '4px' }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: COLORS.textSecondary, padding: '4px' }}
                 title="Fechar"
               >
                 <X size={20} />
@@ -1017,7 +1020,7 @@ const LoansPage = () => {
 
             <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
               {extratoPendentes.length === 0 ? (
-                <p style={{ fontSize: '13px', color: '#64748b', margin: 0 }}>Nenhuma pendência para este devedor.</p>
+                <p style={{ fontSize: '13px', color: COLORS.textMuted, margin: 0 }}>Nenhuma pendência para este devedor.</p>
               ) : (
                 extratoPendentes.map((l) => {
                   const faltam = Math.max(l.parcelas - l.parcela_atual, 0);
@@ -1030,14 +1033,14 @@ const LoansPage = () => {
                         alignItems: 'center',
                         gap: '10px',
                         padding: '10px 12px',
-                        background: 'rgba(15, 23, 42, 0.3)',
+                        background: COLORS.inputBg,
                         borderRadius: '10px',
-                        border: '1px solid rgba(255,255,255,0.04)',
+                        border: `1px solid ${COLORS.borderSubtle}`,
                       }}
                     >
                       <div>
-                        <div style={{ fontSize: '13px', fontWeight: 600, color: '#e2e8f0' }}>{l.descricao}</div>
-                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                        <div style={{ fontSize: '13px', fontWeight: 600, color: COLORS.text }}>{l.descricao}</div>
+                        <div style={{ fontSize: '11px', color: COLORS.textMuted, marginTop: '2px' }}>
                           {l.derivado ? (
                             <>
                               <strong style={{ color: COLORS.info }}>Casa</strong>
@@ -1065,7 +1068,7 @@ const LoansPage = () => {
                           )}
                         </div>
                       </div>
-                      <div style={{ fontSize: '14px', fontWeight: 700, color: '#e2e8f0', whiteSpace: 'nowrap' }}>
+                      <div style={{ fontSize: '14px', fontWeight: 700, color: COLORS.text, whiteSpace: 'nowrap' }}>
                         {formatCurrency(faltaReceber(l))}
                       </div>
                     </div>
@@ -1081,11 +1084,11 @@ const LoansPage = () => {
                 alignItems: 'center',
                 marginTop: '18px',
                 paddingTop: '14px',
-                borderTop: '1px solid rgba(255,255,255,0.08)',
+                borderTop: `1px solid ${COLORS.borderLight}`,
               }}
             >
-              <span style={{ fontSize: '13px', color: '#94a3b8', fontWeight: 600 }}>Total a Pagar</span>
-              <span style={{ fontSize: '20px', fontWeight: 700, color: '#e2e8f0' }}>{formatCurrency(totalExtrato)}</span>
+              <span style={{ fontSize: '13px', color: COLORS.textSecondary, fontWeight: 600 }}>Total a Pagar</span>
+              <span style={{ fontSize: '20px', fontWeight: 700, color: COLORS.text }}>{formatCurrency(totalExtrato)}</span>
             </div>
           </div>
         </div>,

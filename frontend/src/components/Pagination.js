@@ -43,7 +43,7 @@ const Pagination = ({ currentPage, totalPages, onPageChange, totalItems, itemsPe
   const pages = getPageRange();
 
   return (
-    <div className="pagination">
+    <nav className="pagination" aria-label="Paginação">
       <div className="pagination-controls">
         <button
           onClick={() => onPageChange(Math.max(1, currentPage - 1))}
@@ -58,13 +58,7 @@ const Pagination = ({ currentPage, totalPages, onPageChange, totalItems, itemsPe
             <span
               key={`ellipsis-${index}`}
               className="pagination-ellipsis"
-              style={{
-                padding: '0 0.25rem',
-                display: 'inline-flex',
-                alignItems: 'center',
-                color: 'var(--text-muted, #6B7280)',
-                userSelect: 'none',
-              }}
+              aria-hidden="true"
             >
               …
             </span>
@@ -73,6 +67,8 @@ const Pagination = ({ currentPage, totalPages, onPageChange, totalItems, itemsPe
               key={page}
               onClick={() => onPageChange(page)}
               className={`pagination-page ${page === currentPage ? 'active' : ''}`}
+              aria-label={`Página ${page}`}
+              aria-current={page === currentPage ? 'page' : undefined}
             >
               {page}
             </button>
@@ -90,7 +86,7 @@ const Pagination = ({ currentPage, totalPages, onPageChange, totalItems, itemsPe
       <span className="pagination-info">
         Exibindo {startItem}–{endItem} de {totalItems} registros
       </span>
-    </div>
+    </nav>
   );
 };
 

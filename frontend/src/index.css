@@ -1,3 +1,45 @@
+/* ==================== TOKENS DA IDENTIDADE ==================== */
+/* Espelho de `constants/theme.js` para as classes globais de App.css. */
+:root {
+  --bg: #0A0A0B;
+  --surface: #141416;
+  --text: #F2F4F5;
+  --muted: #9BA1A6;
+  --muted-2: #80868C;
+  --navy: #0D4671;
+  --aqua: #92E1E2;
+  --brand: linear-gradient(135deg, var(--navy), var(--aqua));
+
+  --line: rgba(255, 255, 255, 0.07);
+  --line-2: rgba(255, 255, 255, 0.1);
+  --line-subtle: rgba(255, 255, 255, 0.04);
+
+  --success: #4ADE80;
+  --danger: #F87171;
+  --warning: #FBBF24;
+  --info: #60A5FA;
+  --gold: #E3BC6E;
+
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Manrope', 'Inter', system-ui, sans-serif;
+
+  /* Vidro fosco — receita da identidade */
+  --glass-bg:
+    linear-gradient(155deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 42%, rgba(255, 255, 255, 0.01) 100%),
+    rgba(20, 20, 22, 0.55);
+  --glass-blur: blur(24px) saturate(125%);
+  --glass-border: rgba(255, 255, 255, 0.09);
+  --glass-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.05),
+    inset 1px 0 0 rgba(255, 255, 255, 0.03),
+    0 30px 60px -30px rgba(0, 0, 0, 0.85);
+
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+
+  color-scheme: dark;
+}
+
 /* ==================== GLOBAL RESET & BASE ==================== */
 *,
 *::before,
@@ -11,46 +53,76 @@ html {
   scroll-behavior: smooth;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
   margin: 0;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background-color: #0a0e1a;
-  color: #e2e8f0;
+  font-family: var(--font-body);
+  background: radial-gradient(1000px 560px at 50% -8%, #1B1C1E 0, transparent 65%), var(--bg);
+  color: var(--text);
   line-height: 1.6;
   overflow-x: hidden;
+  /* Finanças: colunas de valores alinham quando os algarismos têm a mesma largura. */
+  font-variant-numeric: tabular-nums;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  touch-action: manipulation;
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+/* ==================== FOCO ==================== */
+:focus-visible {
+  outline: 2px solid var(--aqua);
+  outline-offset: 2px;
 }
 
 /* ==================== SCROLLBAR ==================== */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.3);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(100, 116, 139, 0.4);
-  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(100, 116, 139, 0.6);
+  background: rgba(255, 255, 255, 0.22);
+  background-clip: padding-box;
 }
 
 /* Firefox */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(100, 116, 139, 0.4) rgba(15, 23, 42, 0.3);
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
 }
 
 /* ==================== SELECTION ==================== */
 ::selection {
-  background: rgba(6, 182, 212, 0.3);
-  color: #e2e8f0;
+  background: rgba(146, 225, 226, 0.3);
+  color: var(--text);
 }
 
 /* ==================== INPUT AUTOFILL ==================== */
@@ -58,12 +130,27 @@ input:-webkit-autofill,
 input:-webkit-autofill:hover,
 input:-webkit-autofill:focus,
 select:-webkit-autofill {
-  -webkit-text-fill-color: #e2e8f0 !important;
-  -webkit-box-shadow: 0 0 0 1000px rgba(15, 23, 42, 0.9) inset !important;
-  border-color: rgba(255, 255, 255, 0.1) !important;
+  -webkit-text-fill-color: var(--text) !important;
+  -webkit-box-shadow: 0 0 0 1000px var(--surface) inset !important;
+  border-color: var(--line-2) !important;
   transition: background-color 5000s ease-in-out 0s;
 }
 
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+}
+
+/* ==================== MOVIMENTO REDUZIDO ==================== */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

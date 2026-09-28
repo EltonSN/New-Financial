@@ -10,7 +10,7 @@ import ApiService from './services/ApiService';
 import './App.css';
 
 // Lista de imagens disponíveis na pasta public/background
-const backgroundImages = ['bg1.jpg', 'bg2.jpg', 'bg3.jpg', 'bg4.jpg', 'bg5.jpg', 'bg6.jpg', 'bg7.jpg', 'bg8.jpg', 'bg9.jpg', 'bg10.jpg'];
+const backgroundImages = ['bg1.jpg', 'bg2.jpg', 'bg3.jpg', 'bg4.jpg'];
 
 const App = () => {
   const [currentPage, setCurrentPage] = useState('dashboard');
@@ -78,6 +78,8 @@ const App = () => {
           style={{ backgroundImage: `url('/background/${img}')` }}
         />
       ))}
+      {/* Véu escuro sobre a foto — ver .app-scrim em App.css */}
+      <div className="app-scrim" aria-hidden="true" />
 
       {/* Sidebar - Desktop and Mobile */}
       <Sidebar 

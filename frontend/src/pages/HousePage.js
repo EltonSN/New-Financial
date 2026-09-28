@@ -364,7 +364,7 @@ const HousePage = () => {
             Custo Total da Casa · mês atual
           </div>
           <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-            <div style={{ fontSize: FONT.sizes.xxl, fontWeight: FONT.weights.bold, color: COLORS.text, lineHeight: 1.2 }}>
+            <div className="valor-destaque" style={{ fontSize: FONT.sizes.xxl, fontWeight: FONT.weights.bold, color: COLORS.text, lineHeight: 1.2 }}>
               {formatCurrency(totais.custoMes)}
             </div>
             <button
@@ -448,7 +448,7 @@ const HousePage = () => {
                 options={CATEGORIA_OPTIONS}
                 value={formData.categoria}
                 onChange={(e) => setFormData({ ...formData, categoria: e.target.value })}
-                placeholder="Selecione..."
+                placeholder="Selecione…"
                 required
               />
             </div>
@@ -506,7 +506,7 @@ const HousePage = () => {
       </Card>
 
       {loading ? (
-        <p className="loading-text">Carregando...</p>
+        <p className="loading-text">Carregando…</p>
       ) : grupos.length === 0 ? (
         <Card>
           <p className="loading-text">Nenhum gasto da casa cadastrado.</p>
@@ -580,7 +580,7 @@ const HousePage = () => {
                             padding: '12px',
                             background: COLORS.inputBg,
                             borderRadius: '12px',
-                            border: `1px solid ${atrasado ? 'rgba(239, 68, 68, 0.3)' : 'rgba(255,255,255,0.03)'}`,
+                            border: `1px solid ${atrasado ? COLORS.dangerBorder : COLORS.borderSubtle}`,
                           }}
                         >
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px' }}>
@@ -665,10 +665,11 @@ const HousePage = () => {
       {resumoAberto && createPortal(
         <div
           onClick={() => setResumoAberto(false)}
+          className="modal-overlay"
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(0, 0, 0, 0.6)',
+            background: COLORS.overlay,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -678,7 +679,9 @@ const HousePage = () => {
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="glass-card"
+            className="glass-card glass-card--modal"
+            role="dialog"
+            aria-modal="true"
             style={{ maxWidth: '520px', width: '100%', maxHeight: '85vh', overflowY: 'auto', padding: '24px', marginBottom: 0 }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px' }}>
@@ -739,7 +742,7 @@ const HousePage = () => {
                               padding: '10px 12px',
                               background: COLORS.inputBg,
                               borderRadius: '10px',
-                              border: '1px solid rgba(255,255,255,0.04)',
+                              border: `1px solid ${COLORS.borderSubtle}`,
                             }}
                           >
                             <div>
